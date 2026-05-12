@@ -13,6 +13,7 @@
   "background_color": "#0b0d0a",
   "theme_color": "#c5ec3a",
   "categories": ["productivity", "utilities"],
+
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
@@ -20,13 +21,14 @@
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
   ],
+
   "screenshots": [
     {
       "src": "screenshot-mobile.png",
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "LazNote blade view — your notes sorted by urgency"
+      "label": "LazNote blade view — notes sorted by urgency"
     },
     {
       "src": "screenshot-wide.png",
@@ -36,22 +38,70 @@
       "label": "LazNote on desktop"
     }
   ],
+
   "shortcuts": [
     {
       "name": "New Note",
       "short_name": "New",
-      "description": "Capture a new note",
+      "description": "Capture a new note instantly",
       "url": "./index.html?action=pulse",
       "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Airlock",
       "short_name": "Airlock",
-      "description": "Review unsorted notes",
+      "description": "Review notes waiting to be filed",
       "url": "./index.html?action=airlock",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Archive",
+      "short_name": "Archive",
+      "description": "View completed notes",
+      "url": "./index.html?action=archive",
       "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     }
   ],
+
+  "file_handlers": [
+    {
+      "action": "./index.html?action=import",
+      "accept": {
+        "application/json": [".json"],
+        "text/plain": [".txt"]
+      },
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }],
+      "launch_type": "single-client"
+    }
+  ],
+
+  "share_target": {
+    "action": "./index.html?action=share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+
+  "protocol_handlers": [
+    {
+      "protocol": "web+laznote",
+      "url": "./index.html?action=protocol&data=%s"
+    }
+  ],
+
+  "handle_links": "preferred",
+
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+
   "related_applications": [],
   "prefer_related_applications": false
 }

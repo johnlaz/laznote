@@ -396,27 +396,58 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ── Shortcut deep-links (?action=pulse / ?action=airlock) ─
+// ── Shortcut & deep-link handler ───────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   const params = new URLSearchParams(location.search);
   const action = params.get('action');
-  if (action === 'pulse') {
-    // Wait for boot to finish then open capture
-    const wait = setInterval(() => {
-      if (window.LazNote && typeof window.LazNote.closeCapture === 'function') {
-        clearInterval(wait);
-        setTimeout(() => document.getElementById('fab-pulse')?.click(), 400);
+  if (!action) return;
+
+  // Wait for LazNote boot then dispatch
+  const wait = setInterval(() => {
+    if (!window.LazNote) return;
+    clearInterval(wait);
+
+    setTimeout(() => {
+      if (action === 'pulse') {
+        document.getElementById('fab-pulse')?.click();
       }
-    }, 100);
-  }
-  if (action === 'airlock') {
-    const wait = setInterval(() => {
-      if (window.LazNote) {
-        clearInterval(wait);
-        setTimeout(() => window.LazNote.go('airlock'), 400);
+      else if (action === 'airlock') {
+        window.LazNote.go('airlock');
       }
-    }, 100);
-  }
+      else if (action === 'archive') {
+        window.LazNote.go('archive');
+      }
+      else if (action === 'share') {
+        // Web Share Target — text/url arrive as query params
+        const title = params.get('title') || '';
+        const text  = params.get('text')  || '';
+        const url   = params.get('url')   || '';
+        const combined = [title, text, url].filter(Boolean).join('\n');
+        if (combined) {
+          const ta = document.getElementById('capture-text');
+          if (ta) ta.value = combined;
+          document.getElementById('fab-pulse')?.click();
+          setTimeout(() => {
+            const ta2 = document.getElementById('capture-text');
+            if (ta2) ta2.value = combined;
+          }, 300);
+        }
+      }
+      else if (action === 'import') {
+        // File Handler — trigger JSON import flow
+        window.LazNote.importJSON();
+      }
+      else if (action === 'protocol') {
+        // web+laznote:// handler
+        const data = decodeURIComponent(params.get('data') || '');
+        if (data) {
+          const ta = document.getElementById('capture-text');
+          if (ta) ta.value = data;
+          document.getElementById('fab-pulse')?.click();
+        }
+      }
+    }, 400);
+  }, 100);
 });
 </script>
 </body>

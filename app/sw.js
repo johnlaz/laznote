@@ -9,7 +9,8 @@ const PRECACHE = [
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
-  './icon-180.png'
+  './icon-180.png',
+  './splash.mp4'
 ];
 
 // ── Install: pre-cache shell ───────────────────────────────
