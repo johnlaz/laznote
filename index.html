@@ -107,13 +107,22 @@
 
   /* ── nav ───────────────────────────────────────────────────────────── */
   .nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(20px); background: rgba(11,13,10,0.7); border-bottom: 1px solid var(--line); }
-  .nav-inner { display: flex; align-items: center; gap: 14px; padding: 16px 32px; max-width: 1280px; margin: 0 auto; }
+  .nav-inner { display: flex; align-items: center; gap: 14px; padding: 14px 20px; max-width: 1280px; margin: 0 auto; min-width: 0; }
+  @media (min-width: 720px) { .nav-inner { padding: 16px 32px; } }
   .mark { width: 36px; height: 36px; border-radius: 9px; background: url('app/icon.png') center/cover, #000; box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 0 22px rgba(197, 236, 58, 0.22); }
   .wordmark { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
   .wordmark .laz { color: var(--lime); }
-  .nav-links { margin-left: auto; display: flex; gap: 26px; align-items: center; }
-  .nav-links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-50); }
-  .nav-links a:hover { color: var(--ink); }
+  .nav-links { margin-left: auto; display: flex; gap: 26px; align-items: center; min-width: 0; }
+  .nav-links a:not(.btn) { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-50); white-space: nowrap; }
+  .nav-links a:not(.btn):hover { color: var(--ink); }
+  /* mobile: hide text links, shrink launch to a circular icon */
+  @media (max-width: 720px) {
+    .nav-links { gap: 10px; }
+    .nav-links a:not(.btn) { display: none; }
+    .nav-launch.btn { width: 40px; height: 40px; padding: 0; border-radius: 50%; gap: 0; box-shadow: 0 0 0 3px rgba(197,236,58,0.18), 0 8px 22px rgba(197,236,58,0.18); }
+    .nav-launch .label { display: none; }
+    .nav-launch svg { width: 16px; height: 16px; }
+  }
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--line-2); color: var(--ink); background: var(--surface); cursor: pointer; transition: transform 120ms ease, box-shadow 200ms ease; font-family: var(--sans); }
   .btn:hover { transform: translateY(-1px); }
   .btn.primary { background: var(--lime); color: #0b0d0a; border-color: var(--lime); box-shadow: 0 0 0 0 var(--lime-glow); }
@@ -275,8 +284,8 @@
         <a href="#how">How it works</a>
         <a href="#features">Features</a>
         <a href="#privacy">Privacy</a>
-        <a class="btn primary" href="app/index.html">
-          Launch app
+        <a class="btn primary nav-launch" href="app/index.html" aria-label="Launch app">
+          <span class="label">Launch app</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
         </a>
       </div>
