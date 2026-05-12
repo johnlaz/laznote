@@ -2,15 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>LazNote</title>
+<title>LazNote — AI Note Capture</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
-<meta name="theme-color" content="#0b0d0a" />
+
+<!-- PWA core -->
+<meta name="theme-color" content="#c5ec3a" />
+<meta name="description" content="Local-first AI note capture. One tap to empty your head — AI sorts everything into the right stack." />
+<link rel="manifest" href="./manifest.webmanifest" />
+
+<!-- iOS PWA -->
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="LazNote" />
-<link rel="manifest" href="manifest.webmanifest" />
-<link rel="apple-touch-icon" href="icon-180.png" />
-<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png" />
+
+<!-- Favicon -->
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png" />
+
+<!-- Open Graph (store listings + link previews) -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="LazNote — AI Note Capture" />
+<meta property="og:description" content="Local-first AI notes. One Pulse, perfectly filed." />
+<meta property="og:image" content="./icon-512.png" />
+<meta name="twitter:card" content="summary" />
+
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -320,11 +336,88 @@
 }
 </style>
 
+<!-- ── Splash screen ── -->
+<div id="splash" style="position:fixed;inset:0;z-index:9999;background:#0b0d0a;display:flex;align-items:center;justify-content:center;pointer-events:none;">
+  <video id="splash-video"
+    src="./splash.mp4"
+    autoplay muted playsinline
+    style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;"
+  ></video>
+  <!-- Fallback logo shown if video fails or before it loads -->
+  <div id="splash-fallback" style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px;">
+    <div style="width:72px;height:72px;border-radius:50%;background:var(--lime);display:grid;place-items:center;box-shadow:0 0 40px rgba(197,236,58,0.4);">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0b0d0a" stroke-width="2.2" stroke-linecap="round" width="32" height="32"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></svg>
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.3em;color:var(--lime);text-transform:uppercase;">LazNote</div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+// ── Splash ─────────────────────────────────────────────
+(function() {
+  const splash = document.getElementById('splash');
+  const video  = document.getElementById('splash-video');
+  const DURATION = 3000; // 3 s hard cap
+
+  function hideSplash() {
+    if (!splash || splash.dataset.gone) return;
+    splash.dataset.gone = '1';
+    splash.style.transition = 'opacity 0.4s ease';
+    splash.style.opacity = '0';
+    setTimeout(() => { splash.style.display = 'none'; }, 420);
   }
+
+  // Hide after video ends or after 3 s, whichever comes first
+  const timer = setTimeout(hideSplash, DURATION);
+  if (video) {
+    video.addEventListener('ended', () => { clearTimeout(timer); hideSplash(); });
+    video.addEventListener('error', () => { clearTimeout(timer); hideSplash(); });
+  }
+})();
+
+// ── Service Worker ──────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .then(reg => {
+        // Notify waiting SW to activate
+        if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+        reg.addEventListener('updatefound', () => {
+          const newSW = reg.installing;
+          newSW.addEventListener('statechange', () => {
+            if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+              newSW.postMessage('SKIP_WAITING');
+            }
+          });
+        });
+      })
+      .catch(err => console.warn('SW registration failed:', err));
+  });
+}
+
+// ── Shortcut deep-links (?action=pulse / ?action=airlock) ─
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(location.search);
+  const action = params.get('action');
+  if (action === 'pulse') {
+    // Wait for boot to finish then open capture
+    const wait = setInterval(() => {
+      if (window.LazNote && typeof window.LazNote.closeCapture === 'function') {
+        clearInterval(wait);
+        setTimeout(() => document.getElementById('fab-pulse')?.click(), 400);
+      }
+    }, 100);
+  }
+  if (action === 'airlock') {
+    const wait = setInterval(() => {
+      if (window.LazNote) {
+        clearInterval(wait);
+        setTimeout(() => window.LazNote.go('airlock'), 400);
+      }
+    }, 100);
+  }
+});
 </script>
 </body>
 </html>

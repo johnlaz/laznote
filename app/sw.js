@@ -1,43 +1,72 @@
-// LazNote service worker — cache-first for shell, network-first for everything else
-const CACHE = 'laznote-v1';
-const SHELL = [
-  './',
+// LazNote Service Worker — v2
+// Cache name includes version — bump to force update
+const CACHE_NAME = 'laznote-v2';
+
+const PRECACHE = [
   './index.html',
+  './app.js',
+  './styles.css',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
   './icon-180.png'
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+// ── Install: pre-cache shell ───────────────────────────────
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(PRECACHE))
+      .then(() => self.skipWaiting())
+  );
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+// ── Activate: clear old caches ────────────────────────────
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+      ))
       .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
-  // never cache groq API
-  if (url.host.includes('api.groq.com')) return;
-  // never cache non-GET
-  if (e.request.method !== 'GET') return;
-  // app shell — cache-first
-  e.respondWith(
-    caches.match(e.request).then(cached => {
+// ── Fetch: cache-first for shell, network-only for API ────
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Skip non-GET and cross-origin API calls
+  if (request.method !== 'GET') return;
+  if (url.hostname.includes('groq.com')) return;
+  if (url.hostname.includes('googleapis.com')) return;
+  if (url.hostname.includes('cdnjs.cloudflare.com')) return;
+
+  event.respondWith(
+    caches.match(request).then(cached => {
       if (cached) return cached;
-      return fetch(e.request).then(resp => {
-        // cache successful same-origin responses
-        if (resp.ok && url.origin === self.location.origin) {
-          const copy = resp.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
-        }
-        return resp;
-      }).catch(() => cached);
+
+      return fetch(request)
+        .then(response => {
+          // Only cache successful same-origin responses
+          if (response.ok && url.origin === self.location.origin) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          // Offline fallback — return cached index for navigation requests
+          if (request.mode === 'navigate') {
+            return caches.match('./index.html');
+          }
+        });
     })
   );
+});
+
+// ── Message: force update on demand ──────────────────────
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
