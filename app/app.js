@@ -276,7 +276,19 @@ function openCapture() {
   $('#capture').classList.add('open');
   setTimeout(() => $('#capture-text').focus(), 250);
 }
-function closeCapture() { $('#capture').classList.remove('open'); }
+function closeCapture() {
+  if (cameraStream) LazNote.stopCamera();
+  if (voiceRecognition && isVoiceRecording) {
+    voiceRecognition.stop();
+    isVoiceRecording = false;
+  }
+  $('#capture').classList.remove('open');
+  $('#capture-text').value = '';
+  const voiceTranscript = document.getElementById('voice-transcript');
+  if (voiceTranscript) voiceTranscript.textContent = 'Ready to record...';
+  const ocrResult = document.getElementById('ocr-result');
+  if (ocrResult) ocrResult.textContent = 'Scanned text will appear here...';
+}
 let manualStack = null;
 function renderCaptureChips() {
   manualStack = null;
@@ -288,8 +300,20 @@ function renderCaptureChips() {
   }));
 }
 async function saveCapture(mode) {
-  const text = $('#capture-text').value.trim();
-  if (!text) { toast('Type something first'); return; }
+  let text = '';
+  
+  if (currentCaptureMode === 'text' || currentCaptureMode === 'camera') {
+    text = $('#capture-text').value.trim();
+  } else if (currentCaptureMode === 'voice') {
+    const transcript = document.getElementById('voice-transcript');
+    text = transcript ? transcript.textContent.trim() : '';
+  }
+  
+  if (!text || text === 'Ready to record...' || text === 'Scanned text will appear here...') {
+    toast('Type or capture something first');
+    return;
+  }
+  
   const now = Date.now();
   let note = { id: uid(), text, title: text.split('\n')[0].slice(0, 80), stack: manualStack || 'per', due: 'idle', status: 'active', createdAt: now, updatedAt: now, why: '' };
   if (manualStack === '__air') { note.stack = 'per'; note.status = 'airlock'; }
@@ -601,5 +625,337 @@ $$('.botnav .nav[data-go]').forEach(n => n.addEventListener('click', () => nav(n
     document.body.innerHTML = `<div style="padding:40px;color:var(--ink-70);font-family:var(--mono);">Boot error: ${e.message}</div>`;
   }
 })();
+
+// ─── Camera and Voice Capture Modes ──────────────────────
+let cameraStream = null;
+let voiceRecognition = null;
+let isVoiceRecording = false;
+let currentCaptureMode = 'text';
+
+function initializeVoiceRecognition() {
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    voiceRecognition = new SpeechRecognition();
+    voiceRecognition.continuous = true;
+    voiceRecognition.interimResults = true;
+    voiceRecognition.lang = 'en-US';
+
+    voiceRecognition.onstart = () => {
+      isVoiceRecording = true;
+      updateVoiceButton();
+    };
+
+    voiceRecognition.onresult = (event) => {
+      let interim = '';
+      let final = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          final += transcript + ' ';
+        } else {
+          interim += transcript;
+        }
+      }
+      const transcript = document.getElementById('voice-transcript');
+      if (transcript) transcript.textContent = (final || interim) || 'Listening...';
+    };
+
+    voiceRecognition.onend = () => {
+      isVoiceRecording = false;
+      updateVoiceButton();
+    };
+
+    voiceRecognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      const transcript = document.getElementById('voice-transcript');
+      if (transcript) transcript.textContent = 'Error: ' + event.error;
+    };
+  }
+}
+
+function updateVoiceButton() {
+  const btn = document.getElementById('voice-record-btn');
+  if (!btn) return;
+  if (isVoiceRecording) {
+    btn.textContent = '⏹️ Stop recording';
+    btn.style.background = 'rgba(226, 75, 74, 0.2)';
+  } else {
+    btn.textContent = '🎙️ Start recording';
+    btn.style.background = 'transparent';
+  }
+}
+
+// Expose capture mode functions on LazNote object
+window.LazNote.switchCaptureMode = function(mode) {
+  currentCaptureMode = mode;
+  
+  document.querySelectorAll('.input-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+  
+  document.querySelectorAll('.capture-mode-section').forEach(section => {
+    section.classList.remove('active');
+    section.style.display = 'none';
+  });
+  
+  const activeSection = document.getElementById('capture-mode-' + mode);
+  if (activeSection) {
+    activeSection.classList.add('active');
+    activeSection.style.display = 'block';
+  }
+  
+  if (mode === 'voice' && voiceRecognition === null) {
+    initializeVoiceRecognition();
+  }
+  if (mode === 'camera') {
+    const info = document.getElementById('camera-info');
+    if (info) info.textContent = '✓ Ready. Tap "Start" to begin.';
+  }
+};
+
+window.LazNote.toggleVoiceRecord = function() {
+  if (!voiceRecognition) {
+    initializeVoiceRecognition();
+  }
+  
+  if (isVoiceRecording) {
+    voiceRecognition.stop();
+  } else {
+    const transcript = document.getElementById('voice-transcript');
+    if (transcript) transcript.textContent = 'Listening...';
+    voiceRecognition.start();
+  }
+};
+
+window.LazNote.clearVoiceTranscript = function() {
+  if (voiceRecognition && isVoiceRecording) {
+    voiceRecognition.stop();
+  }
+  const transcript = document.getElementById('voice-transcript');
+  if (transcript) transcript.textContent = 'Ready to record...';
+  isVoiceRecording = false;
+  updateVoiceButton();
+};
+
+// ─── Camera Implementation (Proven Working) ──────────────────────────────
+window.LazNote.startCamera = async function() {
+  const status = document.getElementById('camera-status');
+  const video = document.getElementById('camera-video');
+  
+  try {
+    if (status) status.textContent = '⏳ Requesting camera...';
+    
+    // Request camera stream
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } },
+      audio: false
+    });
+    
+    if (!video) return;
+    
+    // Attach stream to video
+    video.srcObject = cameraStream;
+    
+    // Wait for video to be ready
+    return new Promise((resolve) => {
+      video.onloadedmetadata = () => {
+        video.play().catch(() => {});
+        
+        // Update UI
+        document.getElementById('camera-start-btn').style.display = 'none';
+        document.getElementById('camera-snap-btn').style.display = 'flex';
+        document.getElementById('camera-stop-btn').style.display = 'flex';
+        
+        if (status) status.textContent = '✓ Camera ready. Frame text and tap Capture.';
+        resolve();
+      };
+      
+      // Timeout safety
+      setTimeout(resolve, 3000);
+    });
+  } catch (err) {
+    if (status) {
+      if (err.name === 'NotAllowedError') status.textContent = '✗ Permission denied';
+      else if (err.name === 'NotFoundError') status.textContent = '✗ No camera found';
+      else status.textContent = `✗ Error: ${err.message}`;
+    }
+    console.error('Camera error:', err);
+  }
+};
+
+window.LazNote.capturePhoto = async function() {
+  const video = document.getElementById('camera-video');
+  const canvas = document.getElementById('camera-canvas');
+  const result = document.getElementById('ocr-result');
+  const status = document.getElementById('camera-status');
+  
+  if (!video || !canvas || !result) return;
+  
+  // Check video is playing
+  if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+    if (result) result.innerHTML = '⚠️ Video not ready. Wait a moment.';
+    return;
+  }
+  
+  try {
+    // Capture frame
+    const ctx = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    if (canvas.width === 0 || canvas.height === 0) {
+      if (result) result.innerHTML = '⚠️ Could not get video dimensions. Ensure camera is loaded.';
+      return;
+    }
+    
+    ctx.drawImage(video, 0, 0);
+    
+    // Get image data
+    const imageData = canvas.toDataURL('image/jpeg', 0.85);
+    
+    if (result) result.innerHTML = '<span style="color:var(--lime);">⏳ Scanning text...</span>';
+    
+    // Run OCR
+    const ocrResult = await Tesseract.recognize(imageData, 'eng', {
+      logger: (m) => {
+        if (m.status === 'recognizing' && result) {
+          result.innerHTML = `<span style="color:var(--lime);">⏳ Processing ${Math.round(m.progress * 100)}%...</span>`;
+        }
+      }
+    });
+    
+    const text = ocrResult.data.text.trim();
+    
+    if (!text) {
+      if (result) result.innerHTML = '⚠️ No text found. Try better lighting.';
+      return;
+    }
+    
+    // Put text in textarea
+    const textarea = document.getElementById('capture-text');
+    if (textarea) textarea.value = text;
+    
+    // Show result
+    const preview = text.substring(0, 100) + (text.length > 100 ? '...' : '');
+    if (result) result.innerHTML = `<strong style="color:var(--lime);">✓ Success!</strong><br/><br/><code>${preview}</code>`;
+    
+  } catch (err) {
+    if (result) result.innerHTML = `✗ OCR failed: ${err.message}`;
+    console.error('OCR error:', err);
+  }
+};
+
+window.LazNote.stopCamera = function() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+    cameraStream = null;
+  }
+  
+  const video = document.getElementById('camera-video');
+  if (video) video.srcObject = null;
+  
+  document.getElementById('camera-start-btn').style.display = 'flex';
+  document.getElementById('camera-snap-btn').style.display = 'none';
+  document.getElementById('camera-stop-btn').style.display = 'none';
+  
+  const status = document.getElementById('camera-status');
+  if (status) status.textContent = 'Camera stopped. Tap Start to reopen.';
+};
+
+window.LazNote.uploadPhoto = async function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const canvas = document.getElementById('camera-canvas');
+  const result = document.getElementById('ocr-result');
+  const status = document.getElementById('camera-status');
+  
+  if (!canvas || !result) return;
+  
+  try {
+    if (status) status.textContent = '⏳ Loading image...';
+    
+    // Read file
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+      try {
+        const img = new Image();
+        img.onload = async () => {
+          try {
+            // Draw to canvas
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            if (status) status.textContent = '⏳ Scanning text...';
+            
+            // Run OCR
+            const imageData = canvas.toDataURL('image/jpeg', 0.85);
+            
+            const ocrResult = await Tesseract.recognize(imageData, 'eng', {
+              logger: (m) => {
+                if (m.status === 'recognizing' && status) {
+                  status.textContent = `⏳ Processing ${Math.round(m.progress * 100)}%...`;
+                }
+              }
+            });
+            
+            const text = ocrResult.data.text.trim();
+            
+            if (!text) {
+              if (result) result.innerHTML = '⚠️ No text found in image. Try a different photo.';
+              return;
+            }
+            
+            // Put text in textarea
+            const textarea = document.getElementById('capture-text');
+            if (textarea) textarea.value = text;
+            
+            // Show result
+            const preview = text.substring(0, 100) + (text.length > 100 ? '...' : '');
+            if (result) result.innerHTML = `<strong style="color:var(--lime);">✓ Success!</strong><br/><br/><code>${preview}</code>`;
+            if (status) status.textContent = '✓ Photo scanned. Edit text below if needed.';
+            
+            // Reset file input
+            event.target.value = '';
+            
+          } catch (err) {
+            if (result) result.innerHTML = `✗ OCR failed: ${err.message}`;
+            if (status) status.textContent = `✗ Error: ${err.message}`;
+            console.error('OCR error:', err);
+          }
+        };
+        
+        img.onerror = () => {
+          if (result) result.innerHTML = '✗ Failed to load image. Try a different file.';
+          if (status) status.textContent = '✗ Invalid image file.';
+        };
+        
+        img.src = e.target.result;
+        
+      } catch (err) {
+        if (result) result.innerHTML = `✗ Error: ${err.message}`;
+        if (status) status.textContent = `✗ Error: ${err.message}`;
+        console.error('Upload error:', err);
+      }
+    };
+    
+    reader.onerror = () => {
+      if (result) result.innerHTML = '✗ Failed to read file.';
+      if (status) status.textContent = '✗ File read error.';
+    };
+    
+    reader.readAsDataURL(file);
+    
+  } catch (err) {
+    if (result) result.innerHTML = `✗ Error: ${err.message}`;
+    if (status) status.textContent = `✗ Error: ${err.message}`;
+    console.error('Upload error:', err);
+  }
+};
+
+initializeVoiceRecognition();
 
 })();
