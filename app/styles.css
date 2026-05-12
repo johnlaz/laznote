@@ -75,7 +75,7 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
 
 /* topbar (per-view) */
 .topbar { padding: max(env(safe-area-inset-top), 16px) 18px 12px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0; flex: 1; text-align: center; }
+.topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin: 0; flex: 1; text-align: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topbar .spacer { width: 38px; }
 
 /* blade row */
@@ -105,8 +105,8 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
 .fab svg { width: 28px; height: 28px; }
 
 /* bottom nav */
-.botnav { height: calc(64px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); display: grid; grid-template-columns: 1fr 1fr 80px 1fr 1fr; align-items: center; justify-items: center; background: var(--bg); border-top: 1px solid var(--line-2); flex-shrink: 0; }
-.botnav .nav { display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-50); cursor: pointer; padding: 8px; }
+.botnav { height: calc(64px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); display: flex; align-items: center; justify-content: space-around; background: var(--bg); border-top: 1px solid var(--line-2); flex-shrink: 0; }
+.botnav .nav { display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-50); cursor: pointer; padding: 8px 6px; flex: 1; min-width: 0; }
 .botnav .nav.active { color: var(--lime); }
 .botnav .nav svg { width: 18px; height: 18px; }
 
@@ -163,3 +163,165 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
 
 /* sb (status bar in standalone mode is OS-provided; this is just the topbar) */
 .sb-spacer { height: env(safe-area-inset-top); }
+
+/* ── V1 Features ─────────────────────────────────── */
+.btn-sm { appearance: none; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-70); border-radius: 6px; padding: 6px 10px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+.btn-sm:hover { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
+.btn-sm:active { transform: scale(0.96); }
+
+#reasoning-${n.id}.visible { display: block !important; max-height: 200px; }
+
+.blade[data-id]:hover #note-actions-${n.id} { display: block; }
+
+/* Urgency indicator */
+.urgency-bar { width: 3px; height: 20px; border-radius: 1px; flex-shrink: 0; }
+.urgency-high { background: #c5ec3a; }
+.urgency-med { background: #ff9900; }
+.urgency-low { background: #666; }
+
+/* Done state */
+.blade[data-done="true"] { opacity: 0.6; }
+
+/* Tags display */
+.tag-chip { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(197,236,58,0.1); color: #c5ec3a; border: 1px solid rgba(197,236,58,0.3); margin-right: 4px; }
+
+
+/* ── Card Grid View ─────────────────────────────────── */
+#cards-grid { perspective: 1000px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  position: relative;
+  transform: translateY(0) rotateX(0deg);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+}
+
+.card:hover {
+  transform: translateY(-8px) rotateX(2deg);
+  box-shadow: 0 12px 24px rgba(197,236,58,0.15), 0 4px 12px rgba(0,0,0,0.25);
+  border-color: rgba(197,236,58,0.4);
+}
+
+.card.selected {
+  border-color: var(--lime);
+  box-shadow: 0 0 0 2px rgba(197,236,58,0.3);
+  background: linear-gradient(135deg, rgba(197,236,58,0.08) 0%, var(--surface-2) 100%);
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.card-stack {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lime);
+  background: rgba(197,236,58,0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.card-urgency {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.card-urgency.high { background: #c5ec3a; box-shadow: 0 0 8px rgba(197,236,58,0.5); }
+.card-urgency.med { background: #ff9900; }
+.card-urgency.low { background: #666; }
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.card-content {
+  font-size: 12px;
+  color: var(--ink-70);
+  line-height: 1.5;
+  flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-2);
+}
+
+.card-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(197,236,58,0.08);
+  border: 1px solid rgba(197,236,58,0.2);
+  border-radius: 3px;
+  color: var(--lime);
+}
+
+.card-date {
+  font-size: 10px;
+  color: var(--ink-50);
+  margin-left: auto;
+}
+
+.card-checkbox {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--line-2);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card.selected .card-checkbox {
+  background: var(--lime);
+  border-color: var(--lime);
+  color: #0b0d0a;
+  font-weight: 700;
+}
+
+.card-checkbox:hover {
+  border-color: var(--lime);
+  background: rgba(197,236,58,0.1);
+}
+
+
+/* ── Archive + v5 ──────────────────────────────────── */
+.nav { position: relative; }
+.botnav .nav svg { display: block; margin: 0 auto 3px; }
