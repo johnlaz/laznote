@@ -2,148 +2,590 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>LazNote</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<title>LazNote — Local-first AI notes. One Pulse, perfectly filed.</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="description" content="A local-first notes app with AI sorting. Bring your own Groq key. Installs on iPhone, Android, Mac, Windows, Linux." />
 <meta name="theme-color" content="#0b0d0a" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="LazNote" />
-<link rel="manifest" href="manifest.webmanifest" />
-<link rel="apple-touch-icon" href="icon-180.png" />
-<link rel="icon" href="icon-192.png" />
+<link rel="icon" href="app/icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="styles.css" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Caveat:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0b0d0a;
+    --bg-2: #14170f;
+    --surface: #181b13;
+    --surface-2: #1f2317;
+    --line: rgba(255, 255, 255, 0.06);
+    --line-2: rgba(255, 255, 255, 0.10);
+    --ink: #f3f5ec;
+    --ink-70: rgba(243, 245, 236, 0.7);
+    --ink-50: rgba(243, 245, 236, 0.5);
+    --ink-30: rgba(243, 245, 236, 0.3);
+    --lime: #c5ec3a;
+    --lime-glow: rgba(197, 236, 58, 0.55);
+    --lime-soft: rgba(197, 236, 58, 0.12);
+    --amber: #f5b133;
+    --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --hand: "Caveat", cursive;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body { overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+
+  /* ── grain + ambient lime glow ─────────────────────────────────────── */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(900px 600px at 78% -10%, rgba(197,236,58,0.10), transparent 60%),
+      radial-gradient(700px 500px at -10% 90%, rgba(197,236,58,0.06), transparent 55%);
+  }
+
+  /* ── hero background video ─────────────────────────────────────────── */
+  .hero-bg {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 100vw; height: 920px; max-height: 110vh;
+    overflow: hidden; z-index: 0; pointer-events: none;
+    mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
+  }
+  .hero-bg video {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; opacity: 0.42;
+    filter: saturate(1.05) contrast(1.05) hue-rotate(-6deg);
+  }
+  .hero-bg::after {
+    content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(900px 500px at 50% 15%, transparent, rgba(11,13,10,0.55) 70%, var(--bg) 100%),
+      linear-gradient(180deg, rgba(11,13,10,0.4) 0%, transparent 30%, transparent 70%, var(--bg) 100%);
+  }
+
+  /* ── ambient video band (bottom) ───────────────────────────────────── */
+  .video-band {
+    position: relative; overflow: hidden; margin-top: 24px;
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    background: #000;
+  }
+  .video-band video {
+    display: block; width: 100%; height: 100%;
+    object-fit: cover; opacity: 0.82;
+  }
+  .video-band-inner { position: relative; aspect-ratio: 21 / 9; min-height: 380px; }
+  @media (max-width: 720px) { .video-band-inner { aspect-ratio: 4 / 5; min-height: 0; } }
+  .video-band::before {
+    content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    background:
+      linear-gradient(180deg, var(--bg) 0%, transparent 22%, transparent 78%, var(--bg) 100%),
+      linear-gradient(90deg, rgba(11,13,10,0.55) 0%, transparent 30%, transparent 70%, rgba(11,13,10,0.55) 100%);
+  }
+  .video-band .vb-overlay {
+    position: absolute; inset: 0; z-index: 3; display: grid; place-items: center;
+    padding: 32px; text-align: center;
+  }
+  .video-band .vb-overlay h3 {
+    font-family: var(--hand); font-weight: 700; color: var(--lime);
+    font-size: clamp(32px, 5vw, 64px); margin: 0; line-height: 1;
+    text-shadow: 0 0 30px rgba(11,13,10,0.7);
+    transform: rotate(-2deg);
+  }
+  .video-band .vb-overlay p {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--ink); margin: 14px 0 0;
+    text-shadow: 0 0 20px rgba(11,13,10,0.85);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 3px 3px;
+    mix-blend-mode: overlay;
+    opacity: 0.6;
+  }
+  .container { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+
+  /* ── nav ───────────────────────────────────────────────────────────── */
+  .nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(20px); background: rgba(11,13,10,0.7); border-bottom: 1px solid var(--line); }
+  .nav-inner { display: flex; align-items: center; gap: 14px; padding: 16px 32px; max-width: 1280px; margin: 0 auto; }
+  .mark { width: 36px; height: 36px; border-radius: 9px; background: url('app/icon.png') center/cover, #000; box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 0 22px rgba(197, 236, 58, 0.22); }
+  .wordmark { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+  .wordmark .laz { color: var(--lime); }
+  .nav-links { margin-left: auto; display: flex; gap: 26px; align-items: center; }
+  .nav-links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-50); }
+  .nav-links a:hover { color: var(--ink); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 18px; border-radius: 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--line-2); color: var(--ink); background: var(--surface); cursor: pointer; transition: transform 120ms ease, box-shadow 200ms ease; font-family: var(--sans); }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.primary { background: var(--lime); color: #0b0d0a; border-color: var(--lime); box-shadow: 0 0 0 0 var(--lime-glow); }
+  .btn.primary:hover { box-shadow: 0 0 0 6px rgba(197,236,58,0.18), 0 18px 40px rgba(197,236,58,0.15); }
+  .btn.lg { padding: 14px 22px; font-size: 14px; border-radius: 12px; }
+  .btn svg { width: 14px; height: 14px; }
+
+  /* ── hero ──────────────────────────────────────────────────────────── */
+  .hero { padding: 72px 0 96px; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 64px; align-items: center; }
+  @media (max-width: 980px) { .hero { grid-template-columns: 1fr; gap: 48px; padding: 48px 0 64px; } }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--lime); padding: 6px 12px; border: 1px solid rgba(197,236,58,0.25); border-radius: 999px; background: var(--lime-soft); }
+  .eyebrow .pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 10px var(--lime-glow); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: 0.5; } }
+  h1 { font-size: clamp(40px, 6vw, 80px); line-height: 0.98; font-weight: 800; letter-spacing: -0.035em; margin: 22px 0 24px; }
+  h1 .hand { font-family: var(--hand); font-weight: 700; color: var(--lime); display: inline-block; transform: rotate(-2deg) translateY(4px); font-size: 0.92em; }
+  h1 .strike { position: relative; color: var(--ink-50); }
+  h1 .strike::after { content: ""; position: absolute; left: -2%; right: -2%; top: 56%; height: 6px; background: var(--lime); transform: rotate(-2deg); border-radius: 4px; }
+  .lede { font-size: 19px; line-height: 1.5; color: var(--ink-70); max-width: 540px; margin-bottom: 32px; }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .cta-note { font-family: var(--mono); font-size: 11px; color: var(--ink-50); letter-spacing: 0.04em; margin-left: 4px; }
+
+  .hero-stats { margin-top: 48px; display: flex; gap: 36px; flex-wrap: wrap; }
+  .stat .n { font-family: var(--mono); font-size: 22px; font-weight: 600; color: var(--lime); letter-spacing: -0.01em; }
+  .stat .l { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-50); margin-top: 4px; }
+
+  /* ── phone preview ─────────────────────────────────────────────────── */
+  .phone-stage { position: relative; display: flex; justify-content: center; align-items: center; min-height: 720px; }
+  .phone-stage::before {
+    content: ""; position: absolute; width: 480px; height: 480px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(197,236,58,0.22), transparent 70%);
+    filter: blur(10px); z-index: 0;
+  }
+  .phone { position: relative; z-index: 2; width: 340px; height: 700px; background: #000; border-radius: 46px; padding: 11px; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.08), 0 40px 90px rgba(0,0,0,0.6), 0 0 60px rgba(197,236,58,0.10); }
+  .phone::before { content: ""; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); width: 96px; height: 26px; background: #000; border-radius: 18px; z-index: 3; }
+  .screen { width: 100%; height: 100%; background: var(--bg); border-radius: 36px; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .sb { height: 48px; padding: 18px 28px 0; display: flex; align-items: flex-start; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--ink); }
+  .sb .right { display: flex; align-items: center; gap: 6px; }
+  .signal { display: inline-flex; gap: 2px; align-items: flex-end; }
+  .signal span { width: 3px; background: var(--ink); border-radius: 1px; }
+  .signal span:nth-child(1) { height: 4px; } .signal span:nth-child(2) { height: 6px; } .signal span:nth-child(3) { height: 8px; } .signal span:nth-child(4) { height: 10px; }
+  .battery { width: 22px; height: 10px; border: 1px solid var(--ink-70); border-radius: 3px; position: relative; padding: 1px; }
+  .battery::after { content: ""; position: absolute; right: -3px; top: 2.5px; width: 2px; height: 5px; background: var(--ink-70); border-radius: 0 1px 1px 0; }
+  .battery i { display: block; height: 100%; width: 80%; background: var(--ink); border-radius: 1px; }
+  .scr-head { padding: 18px 22px 14px; display: flex; align-items: center; justify-content: space-between; }
+  .scr-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .scr-title .sub { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; color: var(--ink-50); text-transform: uppercase; font-weight: 500; margin-bottom: 4px; }
+  .filter-row { padding: 0 22px 14px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border: 1px solid var(--line-2); border-radius: 999px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--ink-70); }
+  .chip.on { background: var(--lime); color: #0b0d0a; border-color: var(--lime); font-weight: 600; }
+  .blade-list { padding: 0 14px; flex: 1; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+  .blade { position: relative; padding: 12px 14px 12px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  .blade::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 2px 2px 0; background: var(--ink-30); }
+  .blade.now { background: linear-gradient(180deg, rgba(197,236,58,0.07), var(--surface)); border-color: rgba(197,236,58,0.20); }
+  .blade.now::before { background: var(--lime); box-shadow: 0 0 12px var(--lime-glow); animation: pulse 1.6s infinite; }
+  .blade.soon::before { background: var(--amber); }
+  .stack-tag { display: inline-block; font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.18em; padding: 2px 6px; border: 1px solid var(--line-2); border-radius: 3px; color: var(--ink-50); margin-bottom: 6px; }
+  .blade.now .stack-tag { color: var(--lime); border-color: rgba(197,236,58,0.3); }
+  .blade .t { font-size: 13.5px; line-height: 1.3; font-weight: 500; }
+  .blade .row2 { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+  .blade .m { font-family: var(--mono); font-size: 10px; color: var(--ink-50); }
+  .due { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--line-2); color: var(--ink-70); letter-spacing: 0.06em; }
+  .blade.now .due { background: var(--lime); color: #0b0d0a; border-color: var(--lime); }
+  .blade.soon .due { color: var(--amber); border-color: rgba(245,177,51,0.3); }
+  .fab-shell { position: absolute; left: 0; right: 0; bottom: 26px; display: flex; justify-content: center; }
+  .fab { position: relative; width: 70px; height: 70px; border-radius: 50%; background: var(--lime); display: grid; place-items: center; color: #0b0d0a; box-shadow: 0 0 0 6px rgba(197,236,58,0.10), 0 0 32px var(--lime-glow), 0 14px 28px rgba(0,0,0,0.55); }
+  .fab::after { content: ""; position: absolute; inset: -14px; border-radius: 50%; border: 1px solid rgba(197,236,58,0.25); animation: fabring 2.4s ease-out infinite; }
+  @keyframes fabring { 0% { transform: scale(0.9); opacity: 0.8; } 100% { transform: scale(1.3); opacity: 0; } }
+  .fab svg { width: 28px; height: 28px; }
+
+  .phone-tag { position: absolute; z-index: 3; font-family: var(--hand); color: var(--lime); font-size: 22px; line-height: 1; transform: rotate(-4deg); }
+  .phone-tag .arrow { display: inline-block; transform: translateY(2px); }
+  .phone-tag.tl { top: 20px; left: -22px; transform: rotate(-8deg); }
+  .phone-tag.br { bottom: 110px; right: -32px; transform: rotate(4deg); max-width: 130px; }
+  @media (max-width: 980px) { .phone-tag.tl, .phone-tag.br { display: none; } }
+
+  /* ── section ──────────────────────────────────────────────────────── */
+  section { padding: 88px 0; position: relative; }
+  .sec-eyebrow { display: flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--lime); margin-bottom: 18px; }
+  .sec-eyebrow .num { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid rgba(197,236,58,0.3); border-radius: 50%; background: var(--lime-soft); color: var(--lime); font-weight: 600; }
+  h2 { font-size: clamp(28px, 4vw, 52px); font-weight: 800; letter-spacing: -0.025em; margin: 0 0 22px; line-height: 1.05; max-width: 880px; }
+  h2 em { font-style: normal; color: var(--lime); }
+  .sec-lede { font-size: 17px; line-height: 1.55; color: var(--ink-70); max-width: 640px; margin-bottom: 56px; }
+
+  /* features grid */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 900px) { .features { grid-template-columns: 1fr; } }
+  .feat { padding: 26px 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; position: relative; overflow: hidden; transition: border-color 200ms; }
+  .feat:hover { border-color: rgba(197,236,58,0.25); }
+  .feat .ic { width: 42px; height: 42px; border-radius: 10px; background: var(--lime-soft); border: 1px solid rgba(197,236,58,0.25); display: grid; place-items: center; color: var(--lime); margin-bottom: 18px; }
+  .feat .ic svg { width: 20px; height: 20px; }
+  .feat h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .feat p { font-size: 13.5px; line-height: 1.55; color: var(--ink-70); margin: 0; }
+  .feat .tag { position: absolute; top: 18px; right: 18px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; color: var(--ink-30); text-transform: uppercase; }
+
+  /* flow steps */
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  @media (max-width: 900px) { .flow { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .flow { grid-template-columns: 1fr; } }
+  .step { padding: 28px 24px; background: var(--surface); border-right: 1px solid var(--line); position: relative; }
+  .step:last-child { border-right: 0; }
+  @media (max-width: 900px) { .step { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); } .step:nth-child(2n) { border-right: 0; } }
+  @media (max-width: 600px) { .step { border-right: 0; } }
+  .step .n { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; color: var(--lime); margin-bottom: 14px; }
+  .step h4 { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .step p { font-size: 13px; line-height: 1.5; color: var(--ink-70); margin: 0; }
+
+  /* devices */
+  .devices-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; padding: 22px 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+  .devices-row .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-50); }
+  .devices-row .ds { display: flex; gap: 22px; flex-wrap: wrap; flex: 1; }
+  .devices-row .d { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-70); }
+  .devices-row .d svg { width: 16px; height: 16px; color: var(--lime); }
+
+  /* privacy block */
+  .privacy { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  @media (max-width: 800px) { .privacy { grid-template-columns: 1fr; } }
+  .priv-side { padding: 38px 32px; }
+  .priv-side.left { background: var(--surface); border-right: 1px solid var(--line); }
+  @media (max-width: 800px) { .priv-side.left { border-right: 0; border-bottom: 1px solid var(--line); } }
+  .priv-side h3 { font-size: 22px; font-weight: 700; letter-spacing: -0.015em; margin: 0 0 16px; }
+  .priv-side ul { list-style: none; padding: 0; margin: 0; }
+  .priv-side li { font-size: 13.5px; line-height: 1.55; color: var(--ink-70); padding: 9px 0 9px 22px; position: relative; }
+  .priv-side li::before { content: ""; position: absolute; left: 0; top: 16px; width: 12px; height: 1.5px; background: var(--lime); }
+  .priv-side.right { background: var(--bg-2); }
+  .priv-side .key { font-family: var(--mono); font-size: 12px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; color: var(--ink-70); display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+  .priv-side .key .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 10px var(--lime-glow); }
+
+  /* CTA */
+  .cta { text-align: center; padding: 120px 32px; position: relative; }
+  .cta::before {
+    content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 720px; height: 360px; max-width: 90vw;
+    background: radial-gradient(ellipse at center, rgba(197,236,58,0.18), transparent 60%);
+    z-index: 0; filter: blur(5px);
+  }
+  .cta-inner { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; }
+  .cta h2 { font-size: clamp(34px, 5vw, 64px); letter-spacing: -0.03em; margin-bottom: 16px; }
+  .cta p { font-size: 17px; color: var(--ink-70); margin-bottom: 36px; }
+
+  /* footer */
+  footer { border-top: 1px solid var(--line); padding: 36px 0 48px; }
+  .foot-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; padding: 0 32px; max-width: 1280px; margin: 0 auto; }
+  .foot-inner .left { display: flex; align-items: center; gap: 12px; }
+  .foot-inner .mono-line { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; color: var(--ink-50); }
+  .foot-inner .links { margin-left: auto; display: flex; gap: 22px; }
+  .foot-inner .links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-50); }
+  .foot-inner .links a:hover { color: var(--ink); }
+</style>
 </head>
-<body>
-<div class="app-root">
-  <div class="app-shell" id="shell">
-    <div class="sb-spacer"></div>
+<body data-screen-label="LazNote Landing">
 
-    <!-- ───── Onboarding ───── -->
-    <div class="view" data-view="onb">
-      <div class="onb-pad">
-        <div class="onb-step" id="onb-step">01 / 03</div>
-        <h2 class="onb-h" id="onb-h"></h2>
-        <p class="onb-p" id="onb-p"></p>
-        <div style="flex:1;display:grid;place-items:center;margin:24px 0;" id="onb-art"></div>
-        <div id="onb-body"></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
-          <div class="dots" id="onb-dots"><span class="on"></span><span></span><span></span></div>
-          <button class="btn primary" id="onb-next">Next →</button>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="#top" style="display:flex;align-items:center;gap:12px;">
+        <div class="mark"></div>
+        <div class="wordmark"><span class="laz">Laz</span><span>Note</span></div>
+      </a>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+        <a class="btn primary" href="app/index.html">
+          Launch app
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="hero-bg">
+    <video src="media/hero_background.mp4" autoplay muted loop playsinline preload="auto"></video>
+  </div>
+
+  <div id="top" class="container">
+
+    <!-- ── HERO ────────────────────────────────────────────────────── -->
+    <header class="hero" style="position:relative;z-index:1;">
+      <div>
+        <span class="eyebrow">
+          <span class="pulse-dot"></span>
+          v1 · local-first
+        </span>
+        <h1>
+          One <span class="hand">Pulse.</span><br/>
+          <span class="strike">Endless filing.</span><br/>
+          Perfectly filed.
+        </h1>
+        <p class="lede">
+          Speak it, type it, snap it. LazNote drops every thought into the right stack and surfaces what's
+          burning now — without a single tag, folder, or follow-up question.
+        </p>
+        <div class="cta-row">
+          <a class="btn primary lg" href="app/index.html">
+            Launch LazNote
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </a>
+          <a class="btn lg" href="#how">How it works</a>
+          <span class="cta-note">No sign-up. Notes live on your device.</span>
+        </div>
+
+        <div class="hero-stats">
+          <div class="stat"><div class="n">0 KB</div><div class="l">leaves your device*</div></div>
+          <div class="stat"><div class="n">1 Tap</div><div class="l">to capture</div></div>
+          <div class="stat"><div class="n">5 Stacks</div><div class="l">auto-sorted</div></div>
         </div>
       </div>
-    </div>
 
-    <!-- ───── Blade view ───── -->
-    <div class="view" data-view="blade">
-      <div class="topbar" style="padding-top:16px;">
-        <div style="flex:1;">
-          <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-50);display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--lime);animation:pulse 1.8s infinite;"></span><span id="blade-date">Today</span></div>
-          <div style="font-size:24px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;margin-top:4px;"><span id="blade-count">0</span> blades. <span style="color:var(--lime);" id="blade-now-count">0</span> need now.</div>
+      <div class="phone-stage">
+        <div class="phone-tag tl">Pulse it →</div>
+        <div class="phone">
+          <div class="screen">
+            <div class="sb">
+              <span>9:41</span>
+              <div class="right">
+                <span class="signal"><span></span><span></span><span></span><span></span></span>
+                <span class="battery"><i></i></span>
+              </div>
+            </div>
+            <div class="scr-head">
+              <div>
+                <span class="scr-title sub">Today · 4 burning</span>
+                <span class="scr-title">Blade</span>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <div style="width:34px;height:34px;background:var(--surface);border:1px solid var(--line-2);border-radius:10px;display:grid;place-items:center;color:var(--ink-70);">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="filter-row">
+              <span class="chip on">ALL · 142</span>
+              <span class="chip">TRS</span>
+              <span class="chip">DIY</span>
+              <span class="chip">NEXUS</span>
+            </div>
+            <div class="blade-list">
+              <div class="blade now">
+                <span class="stack-tag">TRS</span>
+                <div class="t">File Q1 estimated taxes</div>
+                <div class="row2">
+                  <span class="m">recurring · annual</span>
+                  <span class="due">28 D</span>
+                </div>
+              </div>
+              <div class="blade now">
+                <span class="stack-tag">DIY</span>
+                <div class="t">M12 bolts for trailer</div>
+                <div class="row2">
+                  <span class="m">linked: jet ski rebuild</span>
+                  <span class="due">2 D</span>
+                </div>
+              </div>
+              <div class="blade soon">
+                <span class="stack-tag">NEXUS</span>
+                <div class="t">Refactor auth flow</div>
+                <div class="row2">
+                  <span class="m">3 sibling notes</span>
+                  <span class="due">SOON</span>
+                </div>
+              </div>
+              <div class="blade soon">
+                <span class="stack-tag">DIY</span>
+                <div class="t">Oil change · truck</div>
+                <div class="row2">
+                  <span class="m">due ~6,200 mi</span>
+                  <span class="due">~2 WK</span>
+                </div>
+              </div>
+              <div class="blade idle" style="opacity:0.55;">
+                <span class="stack-tag">TRS</span>
+                <div class="t">LLC insurance renewal</div>
+                <div class="row2">
+                  <span class="m">annual</span>
+                  <span class="due">90 D</span>
+                </div>
+              </div>
+            </div>
+            <div class="fab-shell">
+              <div class="fab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="icon-btn" onclick="LazNote.search()" aria-label="Search"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><path d="M13.5 13.5L17 17"/></svg></div>
+        <div class="phone-tag br">AI sorted<br/>this for you<br/><span class="arrow">↖</span></div>
       </div>
-      <div style="padding:6px 18px 10px;display:flex;gap:12px;overflow-x:auto;border-bottom:1px solid var(--line-2);scrollbar-width:none;white-space:nowrap;" id="stack-tabs"></div>
-      <div class="scroll" style="padding:12px 14px 140px;display:flex;flex-direction:column;gap:6px;" id="blade-list"></div>
-      <div class="fab-shell"><button class="fab" id="fab-pulse" aria-label="Pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></svg></button></div>
-      <div class="botnav">
-        <div class="nav active" data-go="blade"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h14M3 10h14M3 14h10"/></svg>Blades</div>
-        <div class="nav" data-go="stacks"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M10 2l7 4-7 4-7-4 7-4z"/><path d="M3 10l7 4 7-4"/></svg>Stacks</div>
-        <div></div>
-        <div class="nav" data-go="airlock"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 4a3 3 0 00-3 3v1a2 2 0 00-1 3.5A2 2 0 005 15h2v2h6v-2h2a2 2 0 002-3.5A2 2 0 0016 8V7a3 3 0 00-3-3 3 3 0 00-3 0 3 3 0 00-3 0z"/></svg>Airlock</div>
-        <div class="nav" data-go="settings"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.5"/><path d="M10 2v2M10 16v2M3 10H1M19 10h-2M5 5L3.5 3.5M16.5 16.5L15 15M5 15l-1.5 1.5M16.5 3.5L15 5"/></svg>Settings</div>
-      </div>
-    </div>
+    </header>
 
-    <!-- ───── Note detail ───── -->
-    <div class="view" data-view="note">
-      <div class="topbar">
-        <div class="icon-btn" data-back><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M12 5l-5 5 5 5"/></svg></div>
-        <h1 id="note-stack">·</h1>
-        <div class="icon-btn" onclick="LazNote.deleteCurrentNote()" aria-label="Delete"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="14" height="14"><path d="M5 6h10M8 9v6M12 9v6M6 6l1 10h6l1-10M8 6V4h4v2"/></svg></div>
-      </div>
-      <div class="scroll" style="padding:6px 22px 40px;" id="note-body"></div>
-    </div>
-
-    <!-- ───── Stacks ───── -->
-    <div class="view" data-view="stacks">
-      <div class="topbar">
-        <div class="icon-btn" data-back><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M12 5l-5 5 5 5"/></svg></div>
-        <h1>Stacks</h1>
-        <div class="icon-btn" onclick="LazNote.addStack()" aria-label="Add stack"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="14" height="14"><path d="M10 4v12M4 10h12"/></svg></div>
-      </div>
-      <div class="scroll" style="padding:6px 14px 24px;" id="stacks-list"></div>
-    </div>
-
-    <!-- ───── Airlock ───── -->
-    <div class="view" data-view="airlock">
-      <div class="topbar">
-        <div class="icon-btn" data-back><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M12 5l-5 5 5 5"/></svg></div>
-        <h1>Airlock</h1>
-        <div class="spacer"></div>
-      </div>
-      <div class="scroll" style="padding:6px 14px 24px;" id="airlock-list"></div>
-    </div>
-
-    <!-- ───── Settings ───── -->
-    <div class="view" data-view="settings">
-      <div class="topbar">
-        <div class="icon-btn" data-back><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M12 5l-5 5 5 5"/></svg></div>
-        <h1>Settings</h1>
-        <div class="spacer"></div>
-      </div>
-      <div class="scroll" style="padding:0 14px 40px;" id="settings-body"></div>
-    </div>
-
-    <!-- ───── Groq detail ───── -->
-    <div class="view" data-view="groq">
-      <div class="topbar">
-        <div class="icon-btn" data-back><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M12 5l-5 5 5 5"/></svg></div>
-        <h1>Groq</h1>
-        <div class="spacer"></div>
-      </div>
-      <div class="scroll" style="padding:0 14px 40px;" id="groq-body"></div>
-    </div>
-
-    <!-- ───── Capture sheet (over any view) ───── -->
-    <div class="capture-sheet" id="capture">
-      <div class="capture-handle"></div>
-      <div class="topbar">
-        <div class="icon-btn" onclick="LazNote.closeCapture()" aria-label="Close"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M5 5l10 10M15 5L5 15"/></svg></div>
-        <h1>New note</h1>
-        <div class="spacer"></div>
-      </div>
-      <div style="padding:0 22px;flex:1;display:flex;flex-direction:column;">
-        <textarea class="input" id="capture-text" placeholder="Speak your mind. AI will sort it into the right stack."></textarea>
-        <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span class="chip" id="capture-stack-hint" style="display:none;"></span>
-          <span class="chip" id="capture-due-hint" style="display:none;"></span>
+    <!-- ── HOW IT WORKS ────────────────────────────────────────────── -->
+    <section id="how">
+      <div class="sec-eyebrow"><span class="num">1</span> The flow</div>
+      <h2>One button. Four invisible steps. <em>Done.</em></h2>
+      <p class="sec-lede">
+        Most notes apps make you do the filing. LazNote does it the moment you finish talking —
+        so what's on your mind tonight is on the right stack by morning.
+      </p>
+      <div class="flow">
+        <div class="step">
+          <div class="n">01 · Pulse</div>
+          <h4>Hit the button</h4>
+          <p>Long-press, talk, scribble, or paste. One target, anywhere in the app. No category to pick.</p>
         </div>
-        <div style="margin-top:14px;font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--ink-50);text-transform:uppercase;">Manual stack</div>
-        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;" id="capture-stack-chips"></div>
-        <div style="flex:1;"></div>
-        <div style="display:flex;gap:8px;padding:14px 0 calc(20px + env(safe-area-inset-bottom));">
-          <button class="btn ghost" onclick="LazNote.saveCapture('raw')">Save raw</button>
-          <button class="btn primary" style="flex:1;" id="capture-ai" onclick="LazNote.saveCapture('ai')">
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4a3 3 0 00-3 3v1a2 2 0 00-1 3.5A2 2 0 005 15h2v2h6v-2h2a2 2 0 002-3.5A2 2 0 0016 8V7a3 3 0 00-3-3 3 3 0 00-3 0 3 3 0 00-3 0z"/></svg>
-            <span id="capture-ai-label">Sort with AI</span>
-          </button>
+        <div class="step">
+          <div class="n">02 · Listen</div>
+          <h4>Whisper transcribes</h4>
+          <p>Your voice goes straight to Groq's Whisper. The transcript appears live as you speak.</p>
+        </div>
+        <div class="step">
+          <div class="n">03 · Sort</div>
+          <h4>Llama files it</h4>
+          <p>A 70b model reads context, your prior notes, and picks the right stack — or routes uncertain ones to the Airlock for a thumbs-up.</p>
+        </div>
+        <div class="step">
+          <div class="n">04 · Surface</div>
+          <h4>Blade shows what burns</h4>
+          <p>The home view is ranked by urgency, not by date created. NOW is bright. LATER fades. Stale notes ask to be archived.</p>
         </div>
       </div>
-    </div>
+    </section>
+
+    <!-- ── FEATURES ───────────────────────────────────────────────── -->
+    <section id="features">
+      <div class="sec-eyebrow"><span class="num">2</span> What's inside</div>
+      <h2>A notes app that <em>thinks</em> with you, not at you.</h2>
+      <div class="features">
+        <div class="feat">
+          <span class="tag">CAPTURE</span>
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>
+          </div>
+          <h3>Voice-first capture</h3>
+          <p>Talk for 30 seconds, get 2 cards back. The AI segments rants into individual notes — separated, tagged, and filed.</p>
+        </div>
+        <div class="feat">
+          <span class="tag">BRAIN</span>
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9.5 2a4 4 0 00-4 4v0a3 3 0 00-2 5.5A3 3 0 005 17a3.5 3.5 0 005 3 3.5 3.5 0 005-3 3 3 0 001.5-5.5A3 3 0 0014.5 6a4 4 0 00-4-4z"/></svg>
+          </div>
+          <h3>Bring your own Groq</h3>
+          <p>Paste a free Groq key, choose models per task. Your key, your tokens, your rate-limits. Nothing routed through us.</p>
+        </div>
+        <div class="feat">
+          <span class="tag">FOCUS</span>
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <h3>Blade prioritization</h3>
+          <p>Notes ranked by urgency, not date. NOW notes pulse lime. SOON glows amber. IDLE fades back. The home view earns its real estate.</p>
+        </div>
+        <div class="feat">
+          <span class="tag">REVIEW</span>
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+          </div>
+          <h3>Airlock for uncertain notes</h3>
+          <p>When the model isn't sure, the note sits in the Airlock with its reasoning. One tap to confirm. Zero notes get lost in the wrong stack.</p>
+        </div>
+        <div class="feat">
+          <span class="tag">CONTEXT</span>
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 007.5.5l3-3a5 5 0 00-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 00-7.5-.5l-3 3a5 5 0 007 7l1.5-1.5"/></svg>
+          </div>
+          <h3>Why this stack?</h3>
+          <p>Every AI decision is one tap from its receipt — the signals, the linked notes, the pattern. Disagree once and it learns.</p>
+        </div>
+        <div class="feat">
+          <span class="tag">OFFLINE</span>
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7l9-4 9 4M3 7v10l9 4 9-4V7M3 7l9 4 9-4M12 11v10"/></svg>
+          </div>
+          <h3>Local-first, install-anywhere</h3>
+          <p>IndexedDB on every device. Works offline. Installs from any browser — iOS, Android, Mac, Windows, Linux. No App Store hoops.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── DEVICES ─────────────────────────────────────────────────── -->
+    <section style="padding-top: 0;">
+      <div class="devices-row">
+        <div class="label">Installs on</div>
+        <div class="ds">
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg> iPhone</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 5h4M11 19h2"/></svg> Android</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Mac</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Windows</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Linux</div>
+          <div class="d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg> iPad</div>
+        </div>
+        <a class="btn" href="app/index.html">Open in this browser →</a>
+      </div>
+    </section>
+
+    <!-- ── PRIVACY ─────────────────────────────────────────────────── -->
+    <section id="privacy">
+      <div class="sec-eyebrow"><span class="num">3</span> Privacy by default</div>
+      <h2>Your notes never touch our servers. <em>Because there aren't any.</em></h2>
+      <div class="privacy">
+        <div class="priv-side left">
+          <h3>What stays here</h3>
+          <ul>
+            <li>Every note, ever. Stored in IndexedDB on this device only.</li>
+            <li>Your Groq API key. Lives in browser keychain, encrypted at rest.</li>
+            <li>Audio recordings, transcripts, AI reasoning — all local.</li>
+            <li>No accounts. No analytics. No telemetry. No third-party scripts.</li>
+          </ul>
+        </div>
+        <div class="priv-side right">
+          <h3>What goes to Groq</h3>
+          <ul>
+            <li>Only when you Pulse: the note text + a list of your stack names.</li>
+            <li>Sent over HTTPS, directly from your browser to <span class="key" style="display:inline;padding:2px 6px;margin:0;background:var(--surface);">api.groq.com</span>.</li>
+            <li>Groq's privacy policy applies to that single call — nothing else.</li>
+            <li>Want to use it offline? Manual filing still works. AI is optional.</li>
+          </ul>
+          <div class="key">
+            <span class="dot"></span>
+            <span>0 servers · 0 accounts · 0 cookies</span>
+          </div>
+        </div>
+      </div>
+    </section>
 
   </div>
-</div>
 
-<div class="toast" id="toast"></div>
+  <!-- ── AMBIENT VIDEO BAND ─────────────────────────────────────── -->
+  <div class="video-band">
+    <div class="video-band-inner">
+      <video src="media/hero_bottom.mp4" autoplay muted loop playsinline preload="auto"></video>
+      <div class="vb-overlay">
+        <div>
+          <h3>Empty your head.</h3>
+          <p>Local · Fast · Yours</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<script src="app.js"></script>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
-  }
-</script>
+  <div class="container">
+    <!-- ── FINAL CTA ───────────────────────────────────────────────── -->
+    <section class="cta" id="launch">
+      <div class="cta-inner">
+        <div class="sec-eyebrow" style="justify-content:center;"><span class="num">4</span> Ready?</div>
+        <h2>Empty your head.<br/>We'll handle the rest.</h2>
+        <p>Open it. Add it to your home screen. Notes go in, organized notes come out. That's the app.</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <a class="btn primary lg" href="app/index.html">
+            Launch LazNote
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </a>
+          <a class="btn lg" href="https://console.groq.com/keys" target="_blank" rel="noopener">
+            Get a free Groq key
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M9 7h8v8"/></svg>
+          </a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="foot-inner">
+      <div class="left">
+        <div class="mark" style="width:28px;height:28px;border-radius:7px;"></div>
+        <div class="wordmark" style="font-size:14px;"><span class="laz">Laz</span><span>Note</span></div>
+        <div class="mono-line">v1 · local-first · BYO Groq</div>
+      </div>
+      <div class="links">
+        <a href="app/index.html">Launch</a>
+        <a href="#how">How</a>
+        <a href="#privacy">Privacy</a>
+      </div>
+    </div>
+  </footer>
+
 </body>
 </html>
