@@ -1,55 +1,20 @@
 {
-  "name": "LazNote",
+  "name": "LazNote — Local-first AI Notes",
   "short_name": "LazNote",
-  "description": "Local-first AI notes. One Pulse, perfectly filed.",
+  "description": "Local-first AI notes. One Pulse, perfectly filed. Bring your own Groq key.",
   "start_url": "/laznote/",
   "scope": "/laznote/",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait-primary",
   "background_color": "#0b0d0a",
-  "theme_color": "#0b0d0a",
+  "theme_color": "#c5ec3a",
   "lang": "en",
   "categories": ["productivity", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
-    {
-      "src": "/laznote/icons/icon-72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/laznote/icons/icon-96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/laznote/icons/icon-128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/laznote/icons/icon-144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/laznote/icons/icon-152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any"
-    },
     {
       "src": "/laznote/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/laznote/icons/icon-384.png",
-      "sizes": "384x384",
       "type": "image/png",
       "purpose": "any"
     },
@@ -57,35 +22,61 @@
       "src": "/laznote/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/laznote/icons/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/laznote/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "screenshots": [
-    {
-      "src": "/laznote/media/screenshot-wide.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "LazNote — One Pulse, perfectly filed"
-    },
     {
       "src": "/laznote/media/screenshot-narrow.png",
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "LazNote on mobile"
+    },
+    {
+      "src": "/laznote/media/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "LazNote desktop"
     }
   ],
   "shortcuts": [
     {
-      "name": "Launch App",
-      "short_name": "App",
-      "description": "Open the LazNote app",
+      "name": "New Note",
+      "short_name": "Note",
+      "description": "Create a new note",
+      "url": "/laznote/app/?new=true",
+      "icons": [
+        {
+          "src": "/laznote/icons/icon-96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Open App",
+      "short_name": "Open",
+      "description": "Open LazNote",
       "url": "/laznote/app/",
       "icons": [
         {
           "src": "/laznote/icons/icon-96.png",
-          "sizes": "96x96"
+          "sizes": "96x96",
+          "type": "image/png"
         }
       ]
     }
