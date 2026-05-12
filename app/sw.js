@@ -9,8 +9,8 @@ const PRECACHE = [
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
-  './icon-180.png',
-  './splash.mp4'
+  './icon-180.png'
+  // splash.mp4 intentionally excluded — large video file, cached lazily on first request
 ];
 
 // ── Install: pre-cache shell ───────────────────────────────

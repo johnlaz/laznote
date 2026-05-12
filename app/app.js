@@ -519,7 +519,7 @@ function renderNote() {
 
     <!-- Logic section (expandable) -->
     <div style="margin-top:14px;">
-      <button class="btn-sm" id="logic-toggle-btn" onclick="toggleLogicSection()" style="width:100%;justify-content:space-between;display:flex;align-items:center;padding:10px 12px;">
+      <button class="btn-sm" id="logic-toggle-btn" onclick="LazNote.toggleLogicSection()" style="width:100%;justify-content:space-between;display:flex;align-items:center;padding:10px 12px;">
         <span style="display:flex;align-items:center;gap:6px;"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4a3 3 0 00-3 3v1a2 2 0 00-1 3.5A2 2 0 005 15h2v2h6v-2h2a2 2 0 002-3.5A2 2 0 0016 8V7a3 3 0 00-3-3 3 3 0 00-3 0 3 3 0 00-3 0z"/></svg>Logic</span>
         <span id="logic-toggle-icon" style="color:var(--ink-50);">▸</span>
       </button>
@@ -578,7 +578,6 @@ function toggleLogicSection() {
   el.style.display = open ? 'block' : 'none';
   if (icon) icon.textContent = open ? '▾' : '▸';
 }
-
 // ─── Stacks ───────────────────────────────────────────────
 function renderStacks() {
   const defaults = ['biz','diy','dev','per'];
@@ -1306,6 +1305,8 @@ const LazNote = {
   },
 };
 window.LazNote = LazNote;
+// Expose private helpers that inline onclick strings need to reach
+window.LazNote.toggleLogicSection = toggleLogicSection;
 
 // ─── Theme ───────────────────────────────────────────────
 function applyTheme() {
