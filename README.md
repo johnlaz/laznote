@@ -1,0 +1,2 @@
+# laznote
+LazNote
