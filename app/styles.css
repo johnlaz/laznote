@@ -363,3 +363,9 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
 .help-item:last-child { border-bottom: none; }
 .help-q { font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 5px; }
 .help-a { font-size: 12px; color: var(--ink-70); line-height: 1.6; }
+
+/* ── Note edit modal fields ── */
+.edit-field-label {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--ink-50); font-weight: 600;
+}

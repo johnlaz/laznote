@@ -1,4 +1,4 @@
-/* LazNote · app logic (PWA, vanilla JS, no build) */
+/* LazNote v3 · app logic (PWA, vanilla JS, no build) */
 (function () {
 'use strict';
 
@@ -914,7 +914,7 @@ function renderSettings() {
     <div class="section-group">
       <div class="row" onclick="document.getElementById('about-modal').style.display='flex'"><span class="r-label">About LazNote</span><svg class="r-chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 5l5 5-5 5"/></svg></div>
       <div class="row" onclick="document.getElementById('help-modal').style.display='flex'"><span class="r-label">Help &amp; FAQ</span><svg class="r-chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 5l5 5-5 5"/></svg></div>
-      <div class="row"><span class="r-label">Version</span><span class="r-value">1.0 · Phase 2</span></div>
+      <div class="row"><span class="r-label">Version</span><span class="r-value">3.0</span></div>
       <div class="row"><span class="r-label">Storage</span><span class="r-value">Local · IndexedDB</span></div>
     </div>
   `;
@@ -1299,7 +1299,164 @@ const LazNote = {
     if (card) card.classList.toggle('selected');
   },
   exportPDF() { _exportPDF(); },
-  // ── AI LOGIC ACTIONS ────────────────────────────────
+  // ── NOTE EDIT MODAL ─────────────────────────────────
+  openNoteEdit() {
+    const n = state.notes.find(x => x.id === state.currentNoteId); if (!n) return;
+    const stk = stackById(n.stack);
+    const allTags  = [...new Set([...(n.hashtags||[]), ...(n.tags||[])])];
+    const allLinks = [...(n.links||[])];
+
+    document.getElementById('note-edit-body').innerHTML = `
+      <!-- Title -->
+      <div>
+        <div class="edit-field-label">Title</div>
+        <input class="input" id="edit-title" value="${escapeHtml(n.title)}" placeholder="Note title" style="margin-top:6px;" />
+      </div>
+
+      <!-- Stack -->
+      <div>
+        <div class="edit-field-label">Stack</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;" id="edit-stack-chips">
+          ${state.stacks.map(s => `<span class="chip edit-stack-chip ${s.id === n.stack ? 'lime' : ''}" data-id="${s.id}" onclick="LazNote._editSelectStack('${s.id}')">${s.name}</span>`).join('')}
+        </div>
+      </div>
+
+      <!-- Due -->
+      <div>
+        <div class="edit-field-label">Due</div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          ${['today','soon','idle'].map(d => `<span class="chip edit-due-chip ${n.due===d?'lime':''}" data-due="${d}" onclick="LazNote._editSelectDue('${d}')" style="cursor:pointer;">${d.charAt(0).toUpperCase()+d.slice(1)}</span>`).join('')}
+        </div>
+      </div>
+
+      <!-- Urgency -->
+      <div>
+        <div class="edit-field-label">Urgency</div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          ${[['high','#c5ec3a'],['med','#ff9900'],['low','var(--ink-50)']].map(([u,c]) => `<span class="chip edit-urg-chip ${n.urgency===u?'lime':''}" data-urg="${u}" onclick="LazNote._editSelectUrgency('${u}')" style="cursor:pointer;${n.urgency===u?'':''}color:${n.urgency===u?'':c};">${u.charAt(0).toUpperCase()+u.slice(1)}</span>`).join('')}
+        </div>
+      </div>
+
+      <!-- Tags -->
+      <div>
+        <div class="edit-field-label">Tags <span style="color:var(--ink-50);font-weight:400;">— tap × to remove</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;min-height:28px;" id="edit-tags-list">
+          ${allTags.map(t => `<span class="chip" style="cursor:pointer;" onclick="LazNote._editRemoveTag('${t.replace(/'/g,"\\'")}')"><span style="color:var(--lime);">#${escapeHtml(t)}</span> <span style="color:var(--ink-30);font-size:10px;">×</span></span>`).join('')}
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <input class="input" id="edit-tag-input" placeholder="Add tag…" style="flex:1;padding:8px 10px;font-size:13px;" onkeydown="if(event.key==='Enter'){event.preventDefault();LazNote._editAddTag();}" />
+          <button class="btn-sm" onclick="LazNote._editAddTag()" style="white-space:nowrap;">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Linked topics -->
+      <div>
+        <div class="edit-field-label">Linked Topics <span style="color:var(--ink-50);font-weight:400;">— tap × to remove</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;min-height:28px;" id="edit-links-list">
+          ${allLinks.map(l => `<span class="chip" style="cursor:pointer;" onclick="LazNote._editRemoveLink('${l.replace(/'/g,"\\'")}')"><span style="color:var(--ink-70);">${escapeHtml(l)}</span> <span style="color:var(--ink-30);font-size:10px;">×</span></span>`).join('')}
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <input class="input" id="edit-link-input" placeholder="Add linked topic…" style="flex:1;padding:8px 10px;font-size:13px;" onkeydown="if(event.key==='Enter'){event.preventDefault();LazNote._editAddLink();}" />
+          <button class="btn-sm" onclick="LazNote._editAddLink()" style="white-space:nowrap;">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Urgency reason -->
+      <div>
+        <div class="edit-field-label">Urgency note <span style="color:var(--ink-50);font-weight:400;">— optional</span></div>
+        <input class="input" id="edit-urgency-reason" value="${escapeHtml(n.urgencyReason||'')}" placeholder="Why is this urgent?" style="margin-top:6px;" />
+      </div>
+    `;
+
+    // Store working copies of tags/links so add/remove updates them live
+    window._editTags  = allTags.slice();
+    window._editLinks = allLinks.slice();
+    window._editStack = n.stack;
+    window._editDue   = n.due;
+    window._editUrg   = n.urgency || 'low';
+
+    document.getElementById('note-edit-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('edit-title')?.focus(), 100);
+  },
+  closeNoteEdit() {
+    document.getElementById('note-edit-modal').style.display = 'none';
+  },
+  async saveNoteEdit() {
+    const n = state.notes.find(x => x.id === state.currentNoteId); if (!n) return;
+    const title = document.getElementById('edit-title')?.value.trim();
+    const urgReason = document.getElementById('edit-urgency-reason')?.value.trim();
+
+    if (title) n.title = title;
+    n.stack         = window._editStack || n.stack;
+    n.due           = window._editDue   || n.due;
+    n.urgency       = window._editUrg   || n.urgency;
+    n.urgencyReason = urgReason !== undefined ? urgReason : (n.urgencyReason || '');
+    n.tags          = (window._editTags  || []).filter(Boolean);
+    n.hashtags      = [...new Set([...extractHashtags(n.text), ...n.tags.map(t => t.toLowerCase().replace(/\s+/g,'-'))])];
+    n.links         = (window._editLinks || []).filter(Boolean);
+    n.updatedAt     = Date.now();
+
+    await idbPut('notes', n);
+    document.getElementById('note-edit-modal').style.display = 'none';
+    toast('✓ Note updated', 'lime');
+    renderNote();
+    renderBlade();
+  },
+  // ── Edit modal helpers (called from inline onclick) ──
+  _editSelectStack(id) {
+    window._editStack = id;
+    document.querySelectorAll('.edit-stack-chip').forEach(c => {
+      c.classList.toggle('lime', c.dataset.id === id);
+    });
+  },
+  _editSelectDue(due) {
+    window._editDue = due;
+    document.querySelectorAll('.edit-due-chip').forEach(c => {
+      c.classList.toggle('lime', c.dataset.due === due);
+    });
+  },
+  _editSelectUrgency(urg) {
+    window._editUrg = urg;
+    document.querySelectorAll('.edit-urg-chip').forEach(c => {
+      c.classList.toggle('lime', c.dataset.urg === urg);
+    });
+  },
+  _editAddTag() {
+    const input = document.getElementById('edit-tag-input'); if (!input) return;
+    const raw = input.value.trim().replace(/^#/, '').toLowerCase().replace(/\s+/g,'-');
+    if (!raw || window._editTags.includes(raw)) { input.value = ''; return; }
+    window._editTags.push(raw);
+    input.value = '';
+    LazNote._editRenderTags();
+  },
+  _editRemoveTag(tag) {
+    window._editTags = window._editTags.filter(t => t !== tag);
+    LazNote._editRenderTags();
+  },
+  _editRenderTags() {
+    const el = document.getElementById('edit-tags-list'); if (!el) return;
+    el.innerHTML = window._editTags.map(t =>
+      `<span class="chip" style="cursor:pointer;" onclick="LazNote._editRemoveTag('${t.replace(/'/g,"\\'")}')"><span style="color:var(--lime);">#${escapeHtml(t)}</span> <span style="color:var(--ink-30);font-size:10px;">×</span></span>`
+    ).join('');
+  },
+  _editAddLink() {
+    const input = document.getElementById('edit-link-input'); if (!input) return;
+    const raw = input.value.trim();
+    if (!raw || window._editLinks.includes(raw)) { input.value = ''; return; }
+    window._editLinks.push(raw);
+    input.value = '';
+    LazNote._editRenderLinks();
+  },
+  _editRemoveLink(link) {
+    window._editLinks = window._editLinks.filter(l => l !== link);
+    LazNote._editRenderLinks();
+  },
+  _editRenderLinks() {
+    const el = document.getElementById('edit-links-list'); if (!el) return;
+    el.innerHTML = window._editLinks.map(l =>
+      `<span class="chip" style="cursor:pointer;" onclick="LazNote._editRemoveLink('${l.replace(/'/g,"\\'")}')"><span style="color:var(--ink-70);">${escapeHtml(l)}</span> <span style="color:var(--ink-30);font-size:10px;">×</span></span>`
+    ).join('');
+  },
   async resortNote(id) {
     const n = state.notes.find(x => x.id === id); if (!n) return;
     if (!state.settings.groqKey) { toast('Connect Groq in Settings first'); return; }

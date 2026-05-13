@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>LazNote — AI Note Capture</title>
+<title>LazNote v3 — AI Note Capture</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
 
 <!-- PWA core -->
@@ -13,7 +13,7 @@
 <!-- iOS PWA -->
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="LazNote" />
+<meta name="apple-mobile-web-app-title" content="LazNote v3" />
 <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png" />
 
 <!-- Favicon -->
@@ -22,7 +22,7 @@
 
 <!-- Open Graph (store listings + link previews) -->
 <meta property="og:type" content="website" />
-<meta property="og:title" content="LazNote — AI Note Capture" />
+<meta property="og:title" content="LazNote v3 — AI Note Capture" />
 <meta property="og:description" content="Local-first AI notes. One Pulse, perfectly filed." />
 <meta property="og:image" content="./icon-512.png" />
 <meta name="twitter:card" content="summary" />
@@ -58,7 +58,7 @@
     <div class="view" data-view="blade">
       <div class="topbar" style="padding-top:16px;">
         <div style="flex:1;">
-          <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-50);display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--lime);animation:pulse 1.8s infinite;"></span><span id="blade-date">Today</span></div>
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-50);display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--lime);animation:pulse 1.8s infinite;"></span><span id="blade-date">Today</span><span style="margin-left:auto;background:rgba(197,236,58,0.12);color:var(--lime);border:1px solid rgba(197,236,58,0.25);border-radius:4px;padding:1px 6px;font-size:9px;letter-spacing:0.18em;">v3</span></div>
           <div style="font-size:24px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;margin-top:4px;"><span id="blade-count">0</span> blades. <span style="color:var(--lime);" id="blade-now-count">0</span> need now.</div>
         </div>
         <div class="icon-btn" onclick="LazNote.search()" aria-label="Search"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><path d="M13.5 13.5L17 17"/></svg></div>
@@ -89,6 +89,7 @@
         <h1 id="note-stack">·</h1>
         <div style="display:flex;gap:4px;">
           <div class="icon-btn" id="note-done-btn" onclick="LazNote.markDone()" title="Mark Done" aria-label="Done"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" width="14" height="14"><path d="M4 10l5 5 8-8"/></svg></div>
+          <div class="icon-btn" onclick="LazNote.openNoteEdit()" title="Edit fields" aria-label="Edit"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M14.5 2.5a2.121 2.121 0 013 3L6 17l-4 1 1-4 11.5-11.5z"/></svg></div>
           <div class="icon-btn" onclick="LazNote.printNote()" title="Export" aria-label="Export"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M10 3v10M5 9l5 5 5-5"/><path d="M4 16h12"/></svg></div>
           <div class="icon-btn" onclick="LazNote.trashCurrentNote()" title="Trash" aria-label="Trash" style="color:var(--red);"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="14" height="14"><path d="M5 6h10M8 9v6M12 9v6M6 6l1 10h6l1-10M8 6V4h4v2"/></svg></div>
         </div>
@@ -385,7 +386,7 @@
             </div>
             <div>
               <div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;">LazNote</div>
-              <div style="font-family:var(--mono);font-size:10px;color:var(--ink-50);letter-spacing:0.1em;margin-top:2px;">v1.0 · LOCAL-FIRST</div>
+              <div style="font-family:var(--mono);font-size:10px;color:var(--ink-50);letter-spacing:0.1em;margin-top:2px;">v3.0 · LOCAL-FIRST</div>
             </div>
           </div>
           <div style="font-size:13px;color:var(--ink-70);line-height:1.7;margin-bottom:16px;">One tap to empty your head. AI sorts everything into the right stack automatically — or you can file it yourself. Notes live on your device. Only what you Pulse goes to Groq.</div>
@@ -416,6 +417,20 @@
           <div class="help-item"><div class="help-q">How does voice recording work?</div><div class="help-a">Tap the mic icon in capture mode → tap Start. Your recording is sent to Groq Whisper for transcription when you tap "Stop &amp; use".</div></div>
           <div class="help-item"><div class="help-q">Is my data private?</div><div class="help-a">Yes. Notes are stored only on this device in IndexedDB. Nothing is sent anywhere except your Groq API calls, which go directly to api.groq.com.</div></div>
         </div>
+      </div>
+    </div>
+
+    <!-- ───── Note edit modal ───── -->
+    <div id="note-edit-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)LazNote.closeNoteEdit()">
+      <div class="modal-sheet" style="max-height:90vh;overflow-y:auto;">
+        <div class="modal-header" style="position:sticky;top:0;background:var(--bg);z-index:1;">
+          <span class="modal-title">Edit Note</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn primary" style="padding:6px 14px;font-size:13px;" onclick="LazNote.saveNoteEdit()">Save</button>
+            <div class="icon-btn" onclick="LazNote.closeNoteEdit()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M5 5l10 10M15 5L5 15"/></svg></div>
+          </div>
+        </div>
+        <div style="padding:16px 18px 28px;display:flex;flex-direction:column;gap:18px;" id="note-edit-body"></div>
       </div>
     </div>
 
