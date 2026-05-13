@@ -149,6 +149,8 @@ function fmtDue(due) {
 function stackById(id) { return state.stacks.find(s => s.id === id) || { id, name: id.toUpperCase(), desc: '' }; }
 
 // ─── Routing ──────────────────────────────────────────────
+const HIDE_NAV_VIEWS = new Set(['onb', 'note', 'groq']);
+
 function nav(view, push = true) {
   $$('.view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
   state.view = view;
@@ -161,8 +163,14 @@ function nav(view, push = true) {
   if (view === 'settings') renderSettings();
   if (view === 'groq')     renderGroq();
   if (view === 'note')     renderNote();
-  // botnav active state
+  // botnav active state + visibility
   $$('.botnav .nav').forEach(n => n.classList.toggle('active', n.dataset.go === view));
+  const botnav = document.getElementById('botnav');
+  if (botnav) botnav.style.display = HIDE_NAV_VIEWS.has(view) ? 'none' : '';
+  // push history for hardware back
+  if (push && view !== 'onb') {
+    try { history.pushState({ view }, '', location.href.split('?')[0]); } catch(e) {}
+  }
 }
 function back() {
   if (state.navStack.length > 1) state.navStack.pop();
@@ -528,14 +536,17 @@ function renderNote() {
         ${n.urgencyReason ? `<div style="margin-bottom:10px;"><div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:#ff9900;margin-bottom:6px;">URGENCY</div><div style="font-size:12px;color:var(--ink-70);line-height:1.6;">${escapeHtml(n.urgencyReason)}</div></div>` : ''}
         ${(n.hashtags||[]).length ? `<div style="margin-bottom:10px;"><div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:var(--ink-50);margin-bottom:6px;">AUTO-HASHTAGS</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${(n.hashtags||[]).map(h=>`<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:rgba(197,236,58,0.1);color:#c5ec3a;border:1px solid rgba(197,236,58,0.2);">#${h}</span>`).join('')}</div></div>` : ''}
         ${(n.links||[]).length ? `<div style="margin-bottom:10px;"><div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:var(--ink-50);margin-bottom:6px;">LINKED TOPICS</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${(n.links||[]).map(l=>`<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:var(--surface-2);color:var(--ink-70);border:1px solid var(--line-2);">${escapeHtml(l)}</span>`).join('')}</div></div>` : ''}
-        ${!n.aiReasoning && !n.why && !(n.hashtags||[]).length && !(n.links||[]).length ? '<div style="font-size:12px;color:var(--ink-50);">No AI logic recorded. Save with AI to populate this section.</div>' : ''}
+        ${!n.aiReasoning && !n.why && !(n.hashtags||[]).length && !(n.links||[]).length ? `<div style="font-size:12px;color:var(--ink-50);margin-bottom:8px;">No AI logic recorded.${state.settings.groqKey ? ' Tap Re-sort to analyse this note.' : ' Connect Groq in Settings to enable AI analysis.'}</div>` : ''}
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line-2);font-family:var(--mono);font-size:10px;color:var(--ink-30);">Confidence: ${n.confidence ? Math.round(n.confidence * (n.confidence > 1 ? 1 : 100)) + '%' : '—'}</div>
 
         ${state.settings.groqKey ? `
         <!-- AI Actions -->
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line-2);">
           <div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:var(--ink-50);margin-bottom:8px;">AI ACTIONS</div>
-          <div style="display:flex;gap:6px;">
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <button class="btn-sm" style="flex:1;" onclick="LazNote.resortNote('${n.id}')">
+              <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px;"><path d="M4 4l12 12M16 4L4 16"/><circle cx="10" cy="10" r="7"/></svg>Re-sort
+            </button>
             <button class="btn-sm" style="flex:1;" onclick="LazNote.summarizeNote('${n.id}')">
               <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="vertical-align:-1px;margin-right:4px;"><path d="M4 6h12M4 10h8M4 14h10"/></svg>Summarize
             </button>
@@ -901,6 +912,8 @@ function renderSettings() {
 
     <div class="section-label">About</div>
     <div class="section-group">
+      <div class="row" onclick="document.getElementById('about-modal').style.display='flex'"><span class="r-label">About LazNote</span><svg class="r-chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 5l5 5-5 5"/></svg></div>
+      <div class="row" onclick="document.getElementById('help-modal').style.display='flex'"><span class="r-label">Help &amp; FAQ</span><svg class="r-chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 5l5 5-5 5"/></svg></div>
       <div class="row"><span class="r-label">Version</span><span class="r-value">1.0 · Phase 2</span></div>
       <div class="row"><span class="r-label">Storage</span><span class="r-value">Local · IndexedDB</span></div>
     </div>
@@ -961,16 +974,34 @@ const LazNote = {
   saveCapture,
   // ── SEARCH ──────────────────────────────────────────
   search() {
-    const q = prompt('Search notes:');
-    if (!q) return;
-    state._searchQuery = q.trim();
-    renderBlade();
+    const modal = document.getElementById('search-modal');
+    const input = document.getElementById('search-input');
+    if (modal) {
+      input.value = state._searchQuery || '';
+      modal.style.display = 'flex';
+      setTimeout(() => input.focus(), 100);
+    }
+  },
+  closeSearchModal() {
+    document.getElementById('search-modal').style.display = 'none';
+  },
+  doSearch() {
+    const q = document.getElementById('search-input').value.trim();
+    document.getElementById('search-modal').style.display = 'none';
+    if (!q) { state._searchQuery = null; renderBlade(); return; }
+    state._searchQuery = q;
+    if (state.view !== 'blade') nav('blade');
+    else renderBlade();
     const count = searchNotes(q).filter(n => n.status === 'active').length;
-    toast(count ? count + ' result(s) for "' + q + '" · tap search again to clear' : 'No results');
+    toast(count ? `${count} result(s) for "${q}"` : 'No results');
   },
   clearSearch() { state._searchQuery = null; renderBlade(); },
   searchTag(tag) { state._searchQuery = tag; nav('blade'); },
   goStack(id) { state.stack = id; nav('blade'); },
+  // ── Input modal helpers ──────────────────────────────
+  closeInputModal() {
+    document.getElementById('input-modal').style.display = 'none';
+  },
   // ── STACK MANAGEMENT ─────────────────────────────────
   addStack() {
     const m = document.getElementById('stack-modal');
@@ -1114,7 +1145,7 @@ const LazNote = {
             '<span style="background:rgba(197,236,58,0.15);color:var(--lime);padding:2px 8px;border-radius:10px;font-size:10px;font-family:var(--mono);">' + m.score + '%</span>' +
             '</div><div style="font-size:11px;color:var(--ink-50);margin-bottom:8px;">' + m.reasons.join(' · ') + '</div>' +
             '<div style="display:flex;gap:6px;">' +
-            '<button class="btn-sm" style="flex:1;" onclick="LazNote.mergeNotes(\'' + g.anchor.id + '\',\'' + m.note.id + '\');LazNote.scanNotes()">Merge into anchor</button>' +
+            '<button class="btn-sm" style="flex:1;" onclick="LazNote.mergeNotes(\'' + g.anchor.id + '\',\'' + m.note.id + '\')">Merge into anchor</button>' +
             '<button class="btn-sm" onclick="document.getElementById(\'scan-modal\').style.display=\'none\';openNote(\'' + m.note.id + '\')">Open</button>' +
             '</div></div>').join('') +
           '</div>').join('') +
@@ -1122,17 +1153,44 @@ const LazNote = {
     }
     document.getElementById('scan-modal').style.display = 'block';
   },
-  mergeNotes(keepId, archiveId) {
-    const keep = state.notes.find(n => n.id === keepId);
-    const archive = state.notes.find(n => n.id === archiveId);
-    if (!keep || !archive) return;
-    keep.tags = [...new Set([...(keep.tags||[]),...(archive.tags||[])])];
-    keep.hashtags = [...new Set([...(keep.hashtags||[]),...(archive.hashtags||[])])];
-    keep.links = [...new Set([...(keep.links||[]),...(archive.links||[])])];
+  async mergeNotes(keepId, archiveId) {
+    const keep    = state.notes.find(n => n.id === keepId);
+    const dup     = state.notes.find(n => n.id === archiveId);
+    if (!keep || !dup) return;
+
+    // ── Merge metadata into anchor ──────────────────────
+    keep.tags     = [...new Set([...(keep.tags||[]),    ...(dup.tags||[])])];
+    keep.hashtags = [...new Set([...(keep.hashtags||[]),...(dup.hashtags||[])])];
+    keep.links    = [...new Set([...(keep.links||[]),   ...(dup.links||[])])];
+
+    // Append duplicate's text as a pinned block in the anchor
+    const dupDate = new Date(dup.createdAt).toLocaleDateString();
+    keep.text = keep.text.trimEnd() +
+      `\n\n── Merged from "${dup.title}" (${dupDate}) ──\n${dup.text.trim()}`;
     keep.updatedAt = Date.now();
-    archive.status = 'merged'; archive.mergedInto = keepId;
-    idbPut('notes', keep).catch(()=>{}); idbPut('notes', archive).catch(()=>{});
-    renderBlade(); toast('✓ Merged & archived duplicate', 'lime');
+    // Re-extract hashtags from combined text
+    keep.hashtags = [...new Set([...extractHashtags(keep.text), ...(keep.hashtags||[])])];
+
+    // ── Archive duplicate with merge metadata ────────────
+    dup.status     = 'done';
+    dup.done       = true;
+    dup.doneAt     = Date.now();
+    dup.mergedInto = keepId;
+    // Tag it so it's findable
+    dup.tags       = [...new Set([...(dup.tags||[]), 'merged'])];
+    dup.hashtags   = [...new Set([...(dup.hashtags||[]), 'merged'])];
+    // Append reference so user knows where it went
+    dup.text       = dup.text.trimEnd() +
+      `\n\n── Merged into: "${keep.title}" on ${new Date().toLocaleDateString()} ──`;
+
+    await idbPut('notes', keep);
+    await idbPut('notes', dup);
+
+    // Close scan modal and open the anchor note
+    document.getElementById('scan-modal').style.display = 'none';
+    renderBlade();
+    toast('✓ Merged — opening anchor note', 'lime');
+    openNote(keepId);
   },
   // ── PRINT / EXPORT ──────────────────────────────────
   printNote() {
@@ -1242,6 +1300,47 @@ const LazNote = {
   },
   exportPDF() { _exportPDF(); },
   // ── AI LOGIC ACTIONS ────────────────────────────────
+  async resortNote(id) {
+    const n = state.notes.find(x => x.id === id); if (!n) return;
+    if (!state.settings.groqKey) { toast('Connect Groq in Settings first'); return; }
+    const resultEl = document.getElementById('ai-action-result');
+    const labelEl  = document.getElementById('ai-action-label');
+    const textEl   = document.getElementById('ai-action-text');
+    if (resultEl) { resultEl.style.display = 'block'; labelEl.textContent = 'RE-SORTING…'; textEl.textContent = ''; }
+    toast('Re-sorting with AI…', 'lime');
+    try {
+      const r = await aiSortNote(n.text);
+      if (r.stack && state.stacks.find(s => s.id === r.stack)) n.stack = r.stack;
+      if (r.title) n.title = r.title;
+      if (r.due)   n.due   = r.due;
+      n.why           = r.why           || '';
+      n.urgency       = r.urgency       || 'low';
+      n.urgencyReason = r.urgencyReason || '';
+      n.tags          = r.tags          || [];
+      n.links         = r.links         || [];
+      n.isRecurring   = r.isRecurring   || false;
+      n.recurCycle    = r.recurCycle    || null;
+      n.confidence    = r.confidence    ?? 100;
+      n.aiReasoning   = r.aiReasoning   || r.why || '';
+      n.updatedAt     = Date.now();
+      // Re-extract #hashtags from text and merge with AI tags
+      const textTags = extractHashtags(n.text);
+      const aiTags   = (r.tags||[]).map(t => t.toLowerCase().replace(/\s+/g,'-'));
+      n.hashtags = [...new Set([...textTags, ...aiTags])];
+      await idbPut('notes', n);
+      // Show results in the action panel before re-rendering
+      const allTags = [...new Set([...(n.tags||[]), ...(n.hashtags||[])])];
+      if (resultEl && labelEl && textEl) {
+        labelEl.textContent = 'RE-SORTED ✓';
+        textEl.textContent  = `Stack: ${stackById(n.stack).name}  ·  Urgency: ${n.urgency}\nTags: ${allTags.length ? allTags.map(t=>'#'+t).join(', ') : 'none'}\n\n${n.aiReasoning}`;
+      }
+      toast('✓ Re-sorted', 'lime');
+      renderNote();
+    } catch(e) {
+      toast(e.message.slice(0, 50), 'red');
+      if (resultEl && labelEl && textEl) { labelEl.textContent = 'ERROR'; textEl.textContent = e.message; }
+    }
+  },
   async summarizeNote(id) {
     const n = state.notes.find(x => x.id === id); if (!n) return;
     if (!state.settings.groqKey) { toast('Connect Groq first'); return; }
@@ -1318,6 +1417,14 @@ function applyTheme() {
 $('#fab-pulse').addEventListener('click', openCapture);
 $$('[data-back]').forEach(el => el.addEventListener('click', back));
 $$('.botnav .nav[data-go]').forEach(n => n.addEventListener('click', () => nav(n.dataset.go)));
+
+// Search modal — submit on Enter
+document.getElementById('search-input')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') LazNote.doSearch();
+});
+
+// Hardware back button (Android / browser history)
+window.addEventListener('popstate', () => back());
 
 // ─── Boot ────────────────────────────────────────────────
 (async function boot() {
@@ -1889,33 +1996,57 @@ window.LazNote.toggleDone = function(id) {
 window.LazNote.editNote = function(id) {
   const note = state.notes.find(n => n.id === id);
   if (!note) return;
-  const newText = prompt('Edit note:', note.text);
-  if (newText !== null && newText.trim()) {
-    note.text = newText.trim();
+  const modal = document.getElementById('input-modal');
+  document.getElementById('input-modal-title').textContent = 'Edit Note';
+  document.getElementById('input-modal-body').innerHTML = `
+    <textarea class="input" id="edit-note-text" style="min-height:140px;margin-bottom:12px;">${escapeHtml(note.text)}</textarea>
+    <button class="btn primary block" onclick="LazNote._confirmEditNote('${id}')">Save</button>
+  `;
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('edit-note-text')?.focus(), 100);
+};
+
+window.LazNote._confirmEditNote = async function(id) {
+  const note = state.notes.find(n => n.id === id); if (!note) return;
+  const newText = document.getElementById('edit-note-text')?.value.trim();
+  if (newText && newText !== note.text) {
+    note.text = newText;
     note.title = newText.substring(0, 80);
     note.updatedAt = Date.now();
-    idbPut('notes', note).catch(e => toast('Save failed: ' + e.message, 'red'));
+    note.hashtags = extractHashtags(newText);
+    await idbPut('notes', note);
     toast('✓ Note updated', 'lime');
     renderBlade();
   }
+  document.getElementById('input-modal').style.display = 'none';
 };
 
 window.LazNote.moveNote = function(id) {
   const note = state.notes.find(n => n.id === id);
   if (!note) return;
   const available = state.stacks.filter(s => s.id !== note.stack);
-  const labels = available.map(s => s.name).join(', ');
-  const choice = prompt(`Move to: ${labels}`, available[0].name);
-  if (choice) {
-    const found = state.stacks.find(s => s.name.toLowerCase() === choice.toLowerCase());
-    if (found) {
-      note.stack = found.id;
-      note.updatedAt = Date.now();
-      idbPut('notes', note).catch(e => toast('Save failed: ' + e.message, 'red'));
-      toast(`→ Moved to ${found.name}`, 'lime');
-      renderBlade();
-    }
-  }
+  const modal = document.getElementById('input-modal');
+  document.getElementById('input-modal-title').textContent = 'Move to Stack';
+  document.getElementById('input-modal-body').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${available.map(s => `
+        <button class="btn block" style="text-align:left;justify-content:flex-start;gap:10px;" onclick="LazNote._confirmMoveNote('${id}','${s.id}')">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--lime);">${s.name.toUpperCase()}</span>
+          <span style="font-size:11px;color:var(--ink-50);">${escapeHtml(s.desc)}</span>
+        </button>`).join('')}
+    </div>
+  `;
+  modal.style.display = 'flex';
+};
+
+window.LazNote._confirmMoveNote = async function(noteId, stackId) {
+  const note = state.notes.find(n => n.id === noteId); if (!note) return;
+  const stk = stackById(stackId);
+  note.stack = stackId; note.updatedAt = Date.now();
+  await idbPut('notes', note);
+  toast(`→ Moved to ${stk.name}`, 'lime');
+  renderBlade();
+  document.getElementById('input-modal').style.display = 'none';
 };
 
 window.LazNote.deleteNote = function(id) {
