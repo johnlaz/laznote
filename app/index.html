@@ -37,18 +37,84 @@
 <body>
 <div class="app-root">
   <div class="app-shell" id="shell">
+
+    <!-- ── Desktop sidebar (auto-shown at >=1024px) ── -->
+    <aside class="desktop-sidebar" id="desktop-sidebar">
+      <div class="ds-brand">
+        <div class="ds-brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0b0d0a" stroke-width="2.2" stroke-linecap="round" width="18" height="18"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></svg>
+        </div>
+        <div>
+          <div class="ds-brand-text">LazNote</div>
+          <div class="ds-brand-tag">v3 · LOCAL-FIRST</div>
+        </div>
+      </div>
+      <button class="desktop-new-note" onclick="LazNote.openCapture()" style="margin-bottom:14px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        New note
+      </button>
+      <div class="desktop-nav-item" data-go="blade"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h14M3 10h14M3 14h10"/></svg>Blades<span class="badge" id="ds-blade-count" style="display:none;">0</span></div>
+      <div class="desktop-nav-item" data-go="cards"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7"/><rect x="10" y="3" width="7" height="7"/><rect x="3" y="10" width="7" height="7"/><rect x="10" y="10" width="7" height="7"/></svg>Cards</div>
+      <div class="desktop-nav-item" data-go="stacks"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M10 2l7 4-7 4-7-4 7-4z"/><path d="M3 10l7 4 7-4"/></svg>Stacks</div>
+      <div class="desktop-nav-item" data-go="airlock"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 4a3 3 0 00-3 3v1a2 2 0 00-1 3.5A2 2 0 005 15h2v2h6v-2h2a2 2 0 002-3.5A2 2 0 0016 8V7a3 3 0 00-3-3 3 3 0 00-3 0 3 3 0 00-3 0z"/></svg>Airlock<span class="badge" id="ds-airlock-count" style="display:none;">0</span></div>
+      <div class="desktop-nav-item" data-go="archive"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="14" height="4" rx="1"/><path d="M5 7v9a1 1 0 001 1h8a1 1 0 001-1V7"/><path d="M8 11h4"/></svg>Archive</div>
+      <div class="desktop-nav-sep"></div>
+      <div class="desktop-nav-item" onclick="LazNote.scanNotes()" style="cursor:pointer;"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="7"/><path d="M7 10h6M10 7l3 3-3 3"/></svg>Scan for duplicates</div>
+      <div class="desktop-nav-item" onclick="LazNote.search()"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><path d="M13.5 13.5L17 17"/></svg>Search<span style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--ink-50);">/</span></div>
+      <div class="desktop-nav-foot">
+        <div class="desktop-nav-item" data-go="settings"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.5"/><path d="M10 2v2M10 16v2M3 10H1M19 10h-2M5 5L3.5 3.5M16.5 16.5L15 15M5 15l-1.5 1.5M16.5 3.5L15 5"/></svg>Settings</div>
+      </div>
+    </aside>
+
+    <!-- ── Desktop main column (auto-shown at >=1024px) ── -->
+    <section class="desktop-main" id="desktop-main">
+      <div class="desktop-main-header">
+        <div style="flex:1;">
+          <h1 id="ds-main-title">Blades</h1>
+          <div class="header-sub" id="ds-main-sub">All active notes</div>
+        </div>
+        <div class="desktop-col-toggle" id="ds-col-toggle">
+          <button class="on has-tip" data-tip="Single column" data-cols="1" onclick="LazNote.setDesktopCols(1)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="10" height="3"/><rect x="3" y="7" width="10" height="3"/><rect x="3" y="11" width="10" height="3"/></svg></button>
+          <button class="has-tip" data-tip="Two columns" data-cols="2" onclick="LazNote.setDesktopCols(2)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="4" height="10"/><rect x="9" y="3" width="4" height="10"/></svg></button>
+        </div>
+      </div>
+      <div class="desktop-main-body" id="desktop-main-body">
+        <!-- Phone-shell views get re-parented here at runtime on desktop -->
+      </div>
+    </section>
+
+    <!-- ── Desktop edit panel (auto-shown at >=1024px) ── -->
+    <aside class="desktop-edit-panel" id="desktop-edit-panel">
+      <div class="desktop-edit-empty" id="desktop-edit-empty">
+        <div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+          <div>Select a note<br/>to view and edit it here.</div>
+        </div>
+      </div>
+      <div class="desktop-edit-header" id="desktop-edit-header" style="display:none;">
+        <h2 id="desktop-edit-title">·</h2>
+        <button class="action-btn act-done has-tip" data-tip="Mark complete" onclick="LazNote.markDone()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg></button>
+        <button class="action-btn act-edit has-tip" data-tip="Edit details" onclick="LazNote.openNoteEdit()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+        <button class="action-btn act-export has-tip" data-tip="Export" onclick="LazNote.printNote()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        <button class="action-btn act-trash has-tip" data-tip="Trash" onclick="LazNote.trashCurrentNote()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg></button>
+      </div>
+      <div class="desktop-edit-body" id="desktop-edit-body" style="display:none;"></div>
+    </aside>
+
     <div class="sb-spacer"></div>
 
     <!-- ───── Onboarding ───── -->
     <div class="view" data-view="onb">
+      <button class="onb-skip" id="onb-skip" onclick="LazNote.skipOnboarding()">Skip tour</button>
       <div class="onb-pad">
-        <div class="onb-step" id="onb-step">01 / 03</div>
+        <div class="onb-step" id="onb-step">01 / 06</div>
         <h2 class="onb-h" id="onb-h"></h2>
         <p class="onb-p" id="onb-p"></p>
         <div style="flex:1;display:grid;place-items:center;margin:24px 0;" id="onb-art"></div>
         <div id="onb-body"></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;">
-          <div class="dots" id="onb-dots"><span class="on"></span><span></span><span></span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;gap:10px;">
+          <button class="btn ghost" id="onb-back" style="font-size:13px;padding:8px 14px;visibility:hidden;">← Back</button>
+          <div class="dots" id="onb-dots"></div>
           <button class="btn primary" id="onb-next">Next →</button>
         </div>
       </div>
@@ -61,8 +127,8 @@
           <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-50);display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--lime);animation:pulse 1.8s infinite;"></span><span id="blade-date">Today</span><span style="margin-left:auto;background:rgba(197,236,58,0.12);color:var(--lime);border:1px solid rgba(197,236,58,0.25);border-radius:4px;padding:1px 6px;font-size:9px;letter-spacing:0.18em;">v3</span></div>
           <div style="font-size:24px;font-weight:700;letter-spacing:-0.02em;line-height:1.1;margin-top:4px;"><span id="blade-count">0</span> blades. <span style="color:var(--lime);" id="blade-now-count">0</span> need now.</div>
         </div>
-        <div class="icon-btn" onclick="LazNote.search()" aria-label="Search"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><path d="M13.5 13.5L17 17"/></svg></div>
-        <div class="icon-btn" onclick="LazNote.go('settings')" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.5"/><path d="M10 2v2M10 16v2M3 10H1M19 10h-2M5 5L3.5 3.5M16.5 16.5L15 15M5 15l-1.5 1.5M16.5 3.5L15 5"/></svg></div>
+        <div class="icon-btn has-tip" data-tip="Search notes" onclick="LazNote.search()" aria-label="Search"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="9" cy="9" r="5.5"/><path d="M13.5 13.5L17 17"/></svg></div>
+        <div class="icon-btn has-tip" data-tip="Settings" onclick="LazNote.go('settings')" aria-label="Settings"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="10" cy="10" r="2.5"/><path d="M10 2v2M10 16v2M3 10H1M19 10h-2M5 5L3.5 3.5M16.5 16.5L15 15M5 15l-1.5 1.5M16.5 3.5L15 5"/></svg></div>
       </div>
       <div style="padding:6px 18px 10px;display:flex;gap:12px;overflow-x:auto;border-bottom:1px solid var(--line-2);scrollbar-width:none;white-space:nowrap;" id="stack-tabs"></div>
       <div class="scroll" style="padding:12px 14px 140px;display:flex;flex-direction:column;gap:6px;" id="blade-list"></div>
@@ -76,8 +142,8 @@
           <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-50);display:flex;align-items:center;gap:6px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--lime);animation:pulse 1.8s infinite;"></span><span>Card View</span></div>
           <div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;margin-top:4px;">Notes</div>
         </div>
-        <div class="icon-btn" onclick="LazNote.go('blade')" aria-label="Back to blades"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5l-5 5 5 5"/></svg></div>
-        <div class="icon-btn" onclick="LazNote.exportPDF()" aria-label="Export to PDF"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4h8M6 4v12a2 2 0 002 2h4a2 2 0 002-2V4M8 8h4M8 11h4"/></svg></div>
+        <div class="icon-btn has-tip" data-tip="Back to blades" onclick="LazNote.go('blade')" aria-label="Back to blades"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5l-5 5 5 5"/></svg></div>
+        <div class="icon-btn has-tip" data-tip="Export to PDF" onclick="LazNote.exportPDF()" aria-label="Export to PDF"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4h8M6 4v12a2 2 0 002 2h4a2 2 0 002-2V4M8 8h4M8 11h4"/></svg></div>
       </div>
       <div class="scroll" style="padding:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;align-content:start;" id="cards-grid"></div>
     </div>
@@ -85,13 +151,13 @@
     <!-- ───── Note detail ───── -->
     <div class="view" data-view="note">
       <div class="topbar">
-        <div class="icon-btn" data-back><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M12 5l-5 5 5 5"/></svg></div>
+        <div class="icon-btn has-tip" data-tip="Back" data-back><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M12 5l-5 5 5 5"/></svg></div>
         <h1 id="note-stack">·</h1>
-        <div style="display:flex;gap:4px;">
-          <div class="icon-btn" id="note-done-btn" onclick="LazNote.markDone()" title="Mark Done" aria-label="Done"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" width="14" height="14"><path d="M4 10l5 5 8-8"/></svg></div>
-          <div class="icon-btn" onclick="LazNote.openNoteEdit()" title="Edit fields" aria-label="Edit"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M14.5 2.5a2.121 2.121 0 013 3L6 17l-4 1 1-4 11.5-11.5z"/></svg></div>
-          <div class="icon-btn" onclick="LazNote.printNote()" title="Export" aria-label="Export"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M10 3v10M5 9l5 5 5-5"/><path d="M4 16h12"/></svg></div>
-          <div class="icon-btn" onclick="LazNote.trashCurrentNote()" title="Trash" aria-label="Trash" style="color:var(--red);"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="14" height="14"><path d="M5 6h10M8 9v6M12 9v6M6 6l1 10h6l1-10M8 6V4h4v2"/></svg></div>
+        <div class="note-actions">
+          <button class="action-btn act-done has-tip" data-tip="Mark complete" id="note-done-btn" onclick="LazNote.markDone()" aria-label="Mark complete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg></button>
+          <button class="action-btn act-edit has-tip" data-tip="Edit details" onclick="LazNote.openNoteEdit()" aria-label="Edit details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+          <button class="action-btn act-export has-tip" data-tip="Export / share" onclick="LazNote.printNote()" aria-label="Export"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          <button class="action-btn act-trash has-tip" data-tip="Move to trash" onclick="LazNote.trashCurrentNote()" aria-label="Trash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg></button>
         </div>
       </div>
       <div class="scroll" style="padding:6px 22px 40px;" id="note-body"></div>
@@ -102,7 +168,7 @@
       <div class="topbar">
         <div class="icon-btn" data-back><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M12 5l-5 5 5 5"/></svg></div>
         <h1>Stacks</h1>
-        <div class="icon-btn" onclick="LazNote.addStack()" aria-label="Add stack"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="14" height="14"><path d="M10 4v12M4 10h12"/></svg></div>
+        <div class="icon-btn has-tip" data-tip="New stack" onclick="LazNote.addStack()" aria-label="Add stack"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="14" height="14"><path d="M10 4v12M4 10h12"/></svg></div>
       </div>
       <div class="scroll" style="padding:6px 14px 24px;" id="stacks-list"></div>
     </div>
@@ -142,7 +208,7 @@
       <div class="topbar">
         <div class="icon-btn" data-back><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M12 5l-5 5 5 5"/></svg></div>
         <h1>Archive</h1>
-        <div class="icon-btn" id="archive-trash-btn" onclick="LazNote.emptyTrash()" title="Permanently delete all" style="color:var(--red);"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="14" height="14"><path d="M5 6h10M8 9v6M12 9v6M6 6l1 10h6l1-10M8 6V4h4v2"/></svg></div>
+        <div class="icon-btn has-tip" data-tip="Empty trash permanently" id="archive-trash-btn" onclick="LazNote.emptyTrash()" style="color:var(--red);"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" width="14" height="14"><path d="M5 6h10M8 9v6M12 9v6M6 6l1 10h6l1-10M8 6V4h4v2"/></svg></div>
       </div>
       <div class="scroll" style="padding:6px 14px 100px;" id="archive-list"></div>
     </div>
@@ -164,31 +230,31 @@
     <!-- ───── Capture sheet (over any view) ───── -->
     <div class="capture-sheet" id="capture">
       <div class="capture-handle"></div>
-      <div class="topbar">
-        <div class="icon-btn" onclick="LazNote.closeCapture()" aria-label="Close"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M5 5l10 10M15 5L5 15"/></svg></div>
+      <div class="topbar" style="flex-shrink:0;">
+        <div class="icon-btn has-tip" data-tip="Close" onclick="LazNote.closeCapture()" aria-label="Close"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M5 5l10 10M15 5L5 15"/></svg></div>
         <h1>New note</h1>
         <div class="spacer"></div>
       </div>
-      
+
       <!-- Scrollable content area -->
-      <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 22px;">
+      <div class="capture-body">
         <!-- Input mode toggle -->
         <div style="display:flex;gap:6px;margin-bottom:14px;background:var(--surface-2);padding:4px;border-radius:8px;margin-top:14px;">
-          <button class="input-mode-btn active" data-mode="text" onclick="LazNote.switchCaptureMode('text')" style="flex:1;padding:8px 12px;border:none;background:transparent;color:var(--ink-50);font-size:12px;font-weight:500;cursor:pointer;border-radius:6px;transition:all 0.2s ease;">📝 Text</button>
-          <button class="input-mode-btn" data-mode="voice" onclick="LazNote.switchCaptureMode('voice')" style="flex:1;padding:8px 12px;border:none;background:transparent;color:var(--ink-50);font-size:12px;font-weight:500;cursor:pointer;border-radius:6px;transition:all 0.2s ease;">🎤 Voice</button>
-          <button class="input-mode-btn" data-mode="camera" onclick="LazNote.switchCaptureMode('camera')" style="flex:1;padding:8px 12px;border:none;background:transparent;color:var(--ink-50);font-size:12px;font-weight:500;cursor:pointer;border-radius:6px;transition:all 0.2s ease;">📷 Scan</button>
+          <button class="input-mode-btn active has-tip" data-tip="Type your note" data-mode="text" onclick="LazNote.switchCaptureMode('text')" style="flex:1;padding:8px 12px;border:none;background:transparent;color:var(--ink-50);font-size:12px;font-weight:500;cursor:pointer;border-radius:6px;transition:all 0.2s ease;">📝 Text</button>
+          <button class="input-mode-btn has-tip" data-tip="Speak — AI transcribes" data-mode="voice" onclick="LazNote.switchCaptureMode('voice')" style="flex:1;padding:8px 12px;border:none;background:transparent;color:var(--ink-50);font-size:12px;font-weight:500;cursor:pointer;border-radius:6px;transition:all 0.2s ease;">🎤 Voice</button>
+          <button class="input-mode-btn has-tip" data-tip="Scan printed text with camera" data-mode="camera" onclick="LazNote.switchCaptureMode('camera')" style="flex:1;padding:8px 12px;border:none;background:transparent;color:var(--ink-50);font-size:12px;font-weight:500;cursor:pointer;border-radius:6px;transition:all 0.2s ease;">📷 Scan</button>
         </div>
-        
+
         <!-- Text input section -->
         <div id="capture-mode-text" class="capture-mode-section" style="display:block;">
-          <textarea class="input" id="capture-text" placeholder="Speak your mind. AI will sort it into the right stack." inputmode="text" autocomplete="off" autocorrect="on" autocapitalize="sentences" spellcheck="true" enterkeyhint="return"></textarea>
+          <textarea class="capture-textarea" id="capture-text" placeholder="Speak your mind. AI will sort it into the right stack." inputmode="text" autocomplete="off" autocorrect="on" autocapitalize="sentences" spellcheck="true" enterkeyhint="return" oninput="LazNote.autosize(this)"></textarea>
         </div>
-        
+
         <!-- Voice input section -->
         <div id="capture-mode-voice" class="capture-mode-section" style="display:none;">
-          <div style="padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:14px;">
+          <div style="padding:14px;background:var(--surface);border:1px solid var(--line-2);border-radius:8px;margin-bottom:14px;">
             <!-- Waveform visualizer -->
-            <div style="position:relative;height:56px;margin-bottom:12px;border-radius:6px;overflow:hidden;background:var(--bg);border:1px solid var(--line);">
+            <div style="position:relative;height:56px;margin-bottom:12px;border-radius:6px;overflow:hidden;background:var(--bg);border:1px solid var(--line-2);">
               <canvas id="voice-waveform" style="width:100%;height:100%;display:block;"></canvas>
               <div id="voice-status-dot" style="position:absolute;top:8px;right:8px;display:flex;align-items:center;gap:5px;">
                 <span id="voice-dot" style="width:7px;height:7px;border-radius:50%;background:var(--ink-30);display:inline-block;transition:background 0.3s;"></span>
@@ -198,60 +264,60 @@
             <!-- Controls -->
             <div style="display:flex;gap:6px;margin-bottom:12px;">
               <button class="btn ghost" id="voice-record-btn" onclick="LazNote.toggleVoiceRecord()" style="flex:1;font-size:12px;">🎙️ Start recording</button>
-              <button class="btn ghost" id="voice-stop-btn" onclick="LazNote.stopVoiceRecord()" style="flex:1;font-size:12px;display:none;">⏹ Stop & use</button>
-              <button class="btn ghost" onclick="LazNote.clearVoiceTranscript()" style="font-size:12px;padding:0 12px;" title="Clear">✕</button>
+              <button class="btn ghost" id="voice-stop-btn" onclick="LazNote.stopVoiceRecord()" style="flex:1;font-size:12px;display:none;">⏹ Stop &amp; use</button>
+              <button class="btn ghost has-tip" data-tip="Clear transcript" onclick="LazNote.clearVoiceTranscript()" style="font-size:12px;padding:0 12px;" title="Clear">✕</button>
             </div>
-            <div id="voice-transcript" style="min-height:60px;padding:12px;background:var(--bg);border-radius:6px;font-family:var(--mono);font-size:12px;color:var(--ink-70);line-height:1.5;border:1px solid var(--line);">Ready to record. Tap "Start recording" to begin.</div>
+            <div id="voice-transcript" style="min-height:60px;padding:12px;background:var(--bg);border-radius:6px;font-family:var(--mono);font-size:12px;color:var(--ink-70);line-height:1.5;border:1px solid var(--line-2);">Ready to record. Tap "Start recording" to begin.</div>
           </div>
         </div>
-        
+
         <!-- Camera OCR section -->
         <div id="capture-mode-camera" class="capture-mode-section" style="display:none;">
-          <div style="padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:12px;">
+          <div style="padding:12px;background:var(--surface);border:1px solid var(--line-2);border-radius:8px;margin-bottom:12px;">
             <!-- Video + Canvas for capture -->
             <div style="position:relative;width:100%;margin-bottom:10px;">
               <video id="camera-video" autoplay playsinline muted style="width:100%;display:block;border-radius:6px;background:#000;"></video>
               <canvas id="camera-canvas" style="display:none;"></canvas>
             </div>
-            
+
             <!-- Camera Controls -->
             <div style="display:flex;gap:6px;margin-bottom:12px;">
               <button class="btn ghost" id="camera-start-btn" onclick="LazNote.startCamera()" style="flex:1;font-size:12px;">📷 Start Camera</button>
               <button class="btn primary" id="camera-snap-btn" onclick="LazNote.capturePhoto()" style="flex:1;font-size:12px;display:none;">📸 Capture</button>
               <button class="btn ghost" id="camera-stop-btn" onclick="LazNote.stopCamera()" style="flex:1;font-size:12px;display:none;">✕ Stop</button>
             </div>
-            
+
             <!-- File Upload -->
             <div style="margin-bottom:12px;">
-              <label style="display:block;padding:10px;background:var(--bg);border:1px dashed var(--line);border-radius:6px;text-align:center;cursor:pointer;font-size:12px;color:var(--ink-70);">
+              <label style="display:block;padding:10px;background:var(--bg);border:1px dashed var(--line-2);border-radius:6px;text-align:center;cursor:pointer;font-size:12px;color:var(--ink-70);">
                 <input type="file" id="photo-upload" accept="image/*" onchange="LazNote.uploadPhoto(event)" style="display:none;">
                 📁 Or upload a photo
               </label>
             </div>
-            
+
             <!-- Status -->
-            <div id="camera-status" style="padding:8px;background:var(--bg);border:1px solid var(--line);border-radius:4px;font-size:11px;color:var(--ink-70);border-left:3px solid var(--lime);">Ready to scan</div>
+            <div id="camera-status" style="padding:8px;background:var(--bg);border:1px solid var(--line-2);border-radius:4px;font-size:11px;color:var(--ink-70);border-left:3px solid var(--lime);">Ready to scan</div>
           </div>
-          
+
           <!-- OCR Result -->
-          <div id="ocr-result" style="min-height:60px;padding:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;font-family:var(--mono);font-size:12px;color:var(--ink-70);line-height:1.5;">Scanned text will appear here...</div>
+          <div id="ocr-result" style="min-height:60px;padding:12px;background:var(--bg);border:1px solid var(--line-2);border-radius:6px;font-family:var(--mono);font-size:12px;color:var(--ink-70);line-height:1.5;">Scanned text will appear here...</div>
         </div>
-        
+
         <!-- Hints -->
         <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="chip" id="capture-stack-hint" style="display:none;"></span>
           <span class="chip" id="capture-due-hint" style="display:none;"></span>
         </div>
-        
+
         <!-- Manual stack selector -->
         <div style="margin-top:14px;font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--ink-50);text-transform:uppercase;">Manual stack</div>
-        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;" id="capture-stack-chips"></div>
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;" id="capture-stack-chips"></div>
       </div>
-      
-      <!-- Fixed buttons at bottom -->
-      <div style="padding:14px 22px max(20px, env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--line);display:flex;gap:8px;flex-shrink:0;">
-        <button class="btn ghost" onclick="LazNote.saveCapture('raw')">Save raw</button>
-        <button class="btn primary" style="flex:1;" id="capture-ai" onclick="LazNote.saveCapture('ai')">
+
+      <!-- Sticky footer buttons - always visible -->
+      <div class="capture-footer">
+        <button class="btn ghost has-tip" data-tip="Save without sorting" onclick="LazNote.saveCapture('raw')">Save raw</button>
+        <button class="btn primary has-tip" data-tip="Let AI pick the stack" style="flex:1;" id="capture-ai" onclick="LazNote.saveCapture('ai')">
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 4a3 3 0 00-3 3v1a2 2 0 00-1 3.5A2 2 0 005 15h2v2h6v-2h2a2 2 0 002-3.5A2 2 0 0016 8V7a3 3 0 00-3-3 3 3 0 00-3 0 3 3 0 00-3 0z"/></svg>
           <span id="capture-ai-label">Sort with AI</span>
         </button>
@@ -308,14 +374,14 @@
   </div>
 </div>
 
-    <!-- ───── Search modal ───── -->
+    <!-- ───── Scan / merge modal ───── -->
     <div id="scan-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
-      <div style="margin:0 auto;max-width:500px;background:var(--bg);border:1px solid var(--line-2);border-radius:14px;overflow:hidden;">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line-2);">
-          <div style="font-weight:700;font-size:16px;">🔍 Scan Notes</div>
-          <div class="icon-btn" onclick="document.getElementById('scan-modal').style.display='none'">✕</div>
+      <div class="modal-sheet" style="max-height:90vh;overflow-y:auto;">
+        <div class="modal-header" style="position:sticky;top:0;background:var(--bg);z-index:1;">
+          <span class="modal-title">🔍 Scan for duplicates</span>
+          <div class="icon-btn has-tip" data-tip="Close" onclick="document.getElementById('scan-modal').style.display='none'"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M5 5l10 10M15 5L5 15"/></svg></div>
         </div>
-        <div id="scan-body" style="padding:14px 18px 20px;max-height:70vh;overflow-y:auto;"></div>
+        <div id="scan-body" style="padding:14px 18px 24px;"></div>
       </div>
     </div>
 
@@ -432,6 +498,24 @@
         </div>
         <div style="padding:16px 18px 28px;display:flex;flex-direction:column;gap:18px;" id="note-edit-body"></div>
       </div>
+    </div>
+
+    <!-- ───── Merge confirmation modal ───── -->
+    <div id="merge-confirm-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)LazNote.cancelMergeConfirm()">
+      <div class="modal-sheet" style="max-height:90vh;overflow-y:auto;">
+        <div class="modal-header" style="position:sticky;top:0;background:var(--bg);z-index:1;">
+          <span class="modal-title">Confirm merge</span>
+          <div class="icon-btn has-tip" data-tip="Cancel" onclick="LazNote.cancelMergeConfirm()"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M5 5l10 10M15 5L5 15"/></svg></div>
+        </div>
+        <div class="confirm-modal-body" id="merge-confirm-body"></div>
+      </div>
+    </div>
+
+    <!-- ───── Undo toast (rich, with action) ───── -->
+    <div id="undo-toast" class="toast-undo">
+      <span class="msg" id="undo-toast-msg"></span>
+      <button class="undo-btn" id="undo-toast-btn">Undo</button>
+      <div class="undo-progress" id="undo-toast-progress"></div>
     </div>
 
 <script src="app.js"></script>

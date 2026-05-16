@@ -23,6 +23,7 @@ const state = {
   settings: {
     style: 'hifi',        // hifi | industrial
     theme: 'dark',        // dark | light
+    accent: '#c5ec3a',    // custom accent color (defaults to lime)
     groqKey: '',
     autoFile: true,
     showWhy: true,
@@ -140,6 +141,40 @@ function toast(msg, kind = '') {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.className = 'toast', 2200);
 }
+
+// Rich toast with an Undo button. Auto-dismisses after `duration` ms.
+let _undoToastTimers = [];
+function showUndoToast(msg, onUndo, duration = 8000) {
+  const wrap = document.getElementById('undo-toast');
+  if (!wrap) { toast(msg, 'lime'); return; }
+  // Clear any prior timers
+  _undoToastTimers.forEach(t => clearTimeout(t));
+  _undoToastTimers = [];
+
+  document.getElementById('undo-toast-msg').textContent = msg;
+  const progress = document.getElementById('undo-toast-progress');
+  const btn = document.getElementById('undo-toast-btn');
+
+  wrap.classList.add('show');
+
+  // Animate progress bar
+  progress.style.transition = 'none';
+  progress.style.transform = 'scaleX(1)';
+  // Force reflow
+  void progress.offsetWidth;
+  progress.style.transition = `transform ${duration}ms linear`;
+  progress.style.transform = 'scaleX(0)';
+
+  const hide = () => {
+    wrap.classList.remove('show');
+    btn.onclick = null;
+  };
+  btn.onclick = () => {
+    hide();
+    try { onUndo && onUndo(); } catch(e) { console.error(e); }
+  };
+  _undoToastTimers.push(setTimeout(hide, duration));
+}
 function fmtDue(due) {
   if (due === 'overdue') return { label: '-2D', cls: 'now' };
   if (due === 'today')   return { label: 'TODAY', cls: 'now' };
@@ -180,9 +215,9 @@ function back() {
 // ─── Onboarding ───────────────────────────────────────────
 const ONB = [
   {
-    step: '01 / 03',
+    step: '01 / 06',
     h: 'One button.<br>Empty your head.',
-    p: 'Speak it. Type it. <span style="color:var(--lime);">LazNote</span> sorts everything into the right stack for you.',
+    p: 'Got a thought? Tap the green <span style="color:var(--lime);">Pulse</span> button. Speak it, type it, or scan it. That\'s the whole app.',
     art: `<div style="position:relative;">
       <div style="position:absolute;inset:-30px;border:1px solid var(--line-2);border-radius:50%;"></div>
       <div style="position:absolute;inset:-58px;border:1px dashed var(--line-2);border-radius:50%;"></div>
@@ -192,21 +227,62 @@ const ONB = [
     </div>`
   },
   {
-    step: '02 / 03',
-    h: 'Zero manual<br>filing.',
-    p: 'Your note lands in the right stack automatically. Unsure ones go to the <span style="color:var(--lime);">Airlock</span> for a yes/no.',
-    art: `<div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
-      <div style="background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-md);padding:10px 12px;font-size:13px;">"M12 bolts for the trailer"</div>
-      <svg width="20" height="36" viewBox="0 0 20 36" fill="none" stroke="var(--lime)" stroke-width="1.5" stroke-linecap="round"><path d="M10 4v26M4 24l6 6 6-6"/></svg>
-      <div style="display:flex;gap:8px;">
-        <span class="pill">BIZ</span>
-        <span class="pill lime" style="background:var(--lime-soft);">DIY ✓</span>
-        <span class="pill">DEV</span>
+    step: '02 / 06',
+    h: 'Three ways<br>to capture.',
+    p: 'Use whichever is fastest in the moment. All three end up in the same place.',
+    art: `<div class="onb-demo">
+      <div class="onb-demo-label">Capture modes</div>
+      <div class="onb-demo-row"><div style="width:28px;height:28px;border-radius:6px;background:var(--lime-soft);display:grid;place-items:center;color:var(--lime);font-size:14px;">📝</div><div><div class="lbl">Type</div><div class="desc">Fast for short thoughts</div></div></div>
+      <div class="onb-demo-row"><div style="width:28px;height:28px;border-radius:6px;background:var(--lime-soft);display:grid;place-items:center;color:var(--lime);font-size:14px;">🎤</div><div><div class="lbl">Voice</div><div class="desc">Speak it · AI transcribes</div></div></div>
+      <div class="onb-demo-row"><div style="width:28px;height:28px;border-radius:6px;background:var(--lime-soft);display:grid;place-items:center;color:var(--lime);font-size:14px;">📷</div><div><div class="lbl">Scan</div><div class="desc">OCR a sticky note, receipt, whiteboard</div></div></div>
+    </div>`
+  },
+  {
+    step: '03 / 06',
+    h: 'AI files it<br>for you.',
+    p: 'Each note lands in the right <span style="color:var(--lime);">stack</span> automatically. Watch:',
+    art: `<div class="onb-demo" id="onb-demo-filing">
+      <div class="onb-demo-label">Demo</div>
+      <div class="onb-demo-note">"Need M12 bolts for the trailer hitch"</div>
+      <svg class="onb-demo-arrow" viewBox="0 0 18 26" fill="none" stroke="var(--lime)" stroke-width="1.5" stroke-linecap="round"><path d="M9 2v18M3 16l6 6 6-6"/></svg>
+      <div class="onb-demo-stacks">
+        <div class="onb-demo-stack">Biz</div>
+        <div class="onb-demo-stack onb-fly hit" id="onb-stack-hit" style="animation-delay:.3s;">DIY ✓</div>
+        <div class="onb-demo-stack">Dev</div>
+        <div class="onb-demo-stack">Personal</div>
       </div>
     </div>`
   },
   {
-    step: '03 / 03',
+    step: '04 / 06',
+    h: 'Unsure ones<br>land in Airlock.',
+    p: 'If AI isn\'t confident, the note waits in the <span style="color:var(--lime);">Airlock</span> for a quick yes/no — instead of guessing wrong.',
+    art: `<div class="onb-demo">
+      <div class="onb-demo-label">Airlock review</div>
+      <div class="onb-demo-note">"Follow up with Mike about the studio rental"</div>
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:4px;">
+        <span class="pill" style="border-color:rgba(245,177,51,0.4);color:var(--amber);">62% CONFIDENT</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn ghost" style="flex:1;font-size:11px;padding:8px;pointer-events:none;">Biz</button>
+        <button class="btn primary" style="flex:1;font-size:11px;padding:8px;pointer-events:none;">Personal</button>
+      </div>
+      <div style="font-size:11px;color:var(--ink-50);text-align:center;margin-top:2px;">You pick · AI learns</div>
+    </div>`
+  },
+  {
+    step: '05 / 06',
+    h: 'Scan for<br>duplicates.',
+    p: 'Find similar notes and combine them. You confirm before anything merges — and you can <span style="color:var(--lime);">undo</span>.',
+    art: `<div class="onb-demo">
+      <div class="onb-demo-label">Merge flow</div>
+      <div class="onb-demo-note" style="border-left:3px solid var(--lime);">"Call plumber about leak"<div style="font-size:10px;color:var(--ink-50);margin-top:4px;font-family:var(--mono);">ANCHOR</div></div>
+      <svg class="onb-demo-arrow" viewBox="0 0 18 26" fill="none" stroke="var(--lime)" stroke-width="1.5" stroke-linecap="round"><path d="M9 24V6M3 10l6-6 6 6"/></svg>
+      <div class="onb-demo-note" style="opacity:0.7;">"Plumber for kitchen sink"<div style="font-size:10px;color:var(--lime);margin-top:4px;font-family:var(--mono);">82% MATCH</div></div>
+    </div>`
+  },
+  {
+    step: '06 / 06',
     h: 'Local-first.<br>Your brain on Groq.',
     p: 'Notes live on this device. Only what you Pulse goes to Groq. Bring your own key — get one free at <span style="color:var(--lime);">console.groq.com</span>.',
     body: `<div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
@@ -214,7 +290,7 @@ const ONB = [
       <input class="input" id="onb-key" placeholder="gsk_... (or skip and add later)" />
       <div style="display:flex;align-items:center;gap:8px;margin-top:4px;color:var(--ink-50);">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="4" y="9" width="12" height="8" rx="1.5"/><path d="M7 9V6a3 3 0 016 0v3"/></svg>
-        <span style="font-size:11.5px;">Stored only in this device's storage.</span>
+        <span style="font-size:11.5px;">Stored only on this device.</span>
       </div>
     </div>`,
     cta: 'Enter LazNote →',
@@ -231,6 +307,10 @@ function renderOnb() {
   $('#onb-body').innerHTML = o.body || '';
   $('#onb-dots').innerHTML = ONB.map((_, i) => `<span class="${i === onbIdx ? 'on' : ''}"></span>`).join('');
   $('#onb-next').textContent = o.cta || 'Next →';
+  const backBtn = $('#onb-back');
+  if (backBtn) backBtn.style.visibility = onbIdx === 0 ? 'hidden' : 'visible';
+  const skipBtn = $('#onb-skip');
+  if (skipBtn) skipBtn.style.display = onbIdx === ONB.length - 1 ? 'none' : '';
 }
 $('#onb-next').addEventListener('click', async () => {
   if (onbIdx === ONB.length - 1) {
@@ -244,6 +324,9 @@ $('#onb-next').addEventListener('click', async () => {
     onbIdx++;
     renderOnb();
   }
+});
+$('#onb-back')?.addEventListener('click', () => {
+  if (onbIdx > 0) { onbIdx--; renderOnb(); }
 });
 
 // ─── Blade view ────────────────────────────────────────────
@@ -306,7 +389,7 @@ function renderBlade() {
     const stk = stackById(n.stack);
     const urgencyColor = n.urgency === 'high' ? '#c5ec3a' : n.urgency === 'med' ? '#ff9900' : '#666';
     const allCardTags = [...new Set([...(n.hashtags||[]), ...(n.tags||[])])];
-    const tagsHtml = allCardTags.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;">${allCardTags.map(t => `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(197,236,58,0.1);color:#c5ec3a;border:1px solid rgba(197,236,58,0.3);">#${t}</span>`).join('')}</div>` : '';
+    const tagsHtml = allCardTags.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;">${allCardTags.map(t => `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(197,236,58,0.1);color:var(--lime);border:1px solid rgba(197,236,58,0.3);">#${t}</span>`).join('')}</div>` : '';
     return `<div class="blade ${d.cls}" data-id="${n.id}" style="${n.done ? 'opacity:0.6;' : ''}">
       <div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
@@ -485,13 +568,18 @@ function renderNote() {
   // Update done button appearance
   const doneBtn = document.getElementById('note-done-btn');
   if (doneBtn) {
+    // Always restore base class
+    doneBtn.className = 'action-btn act-done has-tip';
     if (isDone) {
-      doneBtn.title = 'Revive note';
-      doneBtn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" width="14" height="14"><path d="M4 10l5 5 8-8"/></svg>';
-      doneBtn.style.color = 'var(--lime)';
+      doneBtn.setAttribute('data-tip', 'Revive note');
+      doneBtn.setAttribute('aria-label', 'Revive note');
+      // ↺ revive icon — keep lime fill so it stays visible
+      doneBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/></svg>';
       doneBtn.onclick = () => LazNote.reviveNote(n.id);
     } else {
-      doneBtn.title = 'Mark Done';
+      doneBtn.setAttribute('data-tip', 'Mark complete');
+      doneBtn.setAttribute('aria-label', 'Mark complete');
+      doneBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>';
       doneBtn.onclick = () => LazNote.markDone();
     }
   }
@@ -502,7 +590,7 @@ function renderNote() {
   // Build hashtags display
   const allHashtags = [...new Set([...(n.hashtags||[]), ...(n.tags||[])])];
   const hashtagsHtml = allHashtags.length
-    ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px;">${allHashtags.map(t => `<span style="font-size:11px;padding:3px 8px;border-radius:5px;background:rgba(197,236,58,0.12);color:#c5ec3a;border:1px solid rgba(197,236,58,0.25);cursor:pointer;" onclick="LazNote.searchTag('${t}')">#${t}</span>`).join('')}</div>`
+    ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px;">${allHashtags.map(t => `<span style="font-size:11px;padding:3px 8px;border-radius:5px;background:rgba(197,236,58,0.12);color:var(--lime);border:1px solid rgba(197,236,58,0.25);cursor:pointer;" onclick="LazNote.searchTag('${t}')">#${t}</span>`).join('')}</div>`
     : '';
 
   // Build linked topics
@@ -517,7 +605,7 @@ function renderNote() {
     <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
       <span class="chip ${d.cls === 'now' ? 'lime' : ''}">${d.label}</span>
       <span class="chip">${new Date(n.createdAt).toLocaleDateString()}</span>
-      ${n.urgency && n.urgency !== 'low' ? `<span class="chip" style="color:${n.urgency==='high'?'#c5ec3a':'#ff9900'};">${n.urgency.toUpperCase()}</span>` : ''}
+      ${n.urgency && n.urgency !== 'low' ? `<span class="chip" style="color:${n.urgency==='high'?'var(--lime)':'#ff9900'};">${n.urgency.toUpperCase()}</span>` : ''}
     </div>
 
     <textarea class="input" id="note-text" style="margin-top:14px;min-height:180px;${isDone ? 'opacity:0.7;' : ''}" ${isDone ? 'readonly' : ''}>${escapeHtml(n.text)}</textarea>
@@ -534,7 +622,7 @@ function renderNote() {
       <div id="logic-section" style="display:none;margin-top:2px;padding:12px;background:var(--surface);border:1px solid rgba(197,236,58,0.2);border-radius:8px;">
         ${n.aiReasoning || n.why ? `<div style="margin-bottom:10px;"><div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:var(--lime);margin-bottom:6px;">AI REASONING</div><div style="font-size:12px;color:var(--ink-70);line-height:1.6;">${escapeHtml(n.aiReasoning || n.why)}</div></div>` : ''}
         ${n.urgencyReason ? `<div style="margin-bottom:10px;"><div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:#ff9900;margin-bottom:6px;">URGENCY</div><div style="font-size:12px;color:var(--ink-70);line-height:1.6;">${escapeHtml(n.urgencyReason)}</div></div>` : ''}
-        ${(n.hashtags||[]).length ? `<div style="margin-bottom:10px;"><div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:var(--ink-50);margin-bottom:6px;">AUTO-HASHTAGS</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${(n.hashtags||[]).map(h=>`<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:rgba(197,236,58,0.1);color:#c5ec3a;border:1px solid rgba(197,236,58,0.2);">#${h}</span>`).join('')}</div></div>` : ''}
+        ${(n.hashtags||[]).length ? `<div style="margin-bottom:10px;"><div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:var(--ink-50);margin-bottom:6px;">AUTO-HASHTAGS</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${(n.hashtags||[]).map(h=>`<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:rgba(197,236,58,0.1);color:var(--lime);border:1px solid rgba(197,236,58,0.2);">#${h}</span>`).join('')}</div></div>` : ''}
         ${(n.links||[]).length ? `<div style="margin-bottom:10px;"><div style="font-family:var(--mono);font-size:9.5px;letter-spacing:0.14em;color:var(--ink-50);margin-bottom:6px;">LINKED TOPICS</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${(n.links||[]).map(l=>`<span style="font-size:11px;padding:2px 7px;border-radius:4px;background:var(--surface-2);color:var(--ink-70);border:1px solid var(--line-2);">${escapeHtml(l)}</span>`).join('')}</div></div>` : ''}
         ${!n.aiReasoning && !n.why && !(n.hashtags||[]).length && !(n.links||[]).length ? `<div style="font-size:12px;color:var(--ink-50);margin-bottom:8px;">No AI logic recorded.${state.settings.groqKey ? ' Tap Re-sort to analyse this note.' : ' Connect Groq in Settings to enable AI analysis.'}</div>` : ''}
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line-2);font-family:var(--mono);font-size:10px;color:var(--ink-30);">Confidence: ${n.confidence ? Math.round(n.confidence * (n.confidence > 1 ? 1 : 100)) + '%' : '—'}</div>
@@ -661,20 +749,20 @@ function renderArchive() {
       const stk = stackById(n.stack);
       const doneDate = n.doneAt ? new Date(n.doneAt).toLocaleDateString() : '';
       const tagsHtml = (n.hashtags||[]).length
-        ? (n.hashtags||[]).slice(0,3).map(t=>`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(197,236,58,0.1);color:#c5ec3a;border:1px solid rgba(197,236,58,0.2);">#${t}</span>`).join(' ')
+        ? (n.hashtags||[]).slice(0,3).map(t=>`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(197,236,58,0.1);color:var(--lime);border:1px solid rgba(197,236,58,0.2);">#${t}</span>`).join(' ')
         : '';
       html += `<div style="background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:12px 14px;margin-bottom:8px;opacity:0.85;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
           <div style="flex:1;">
-            <span style="font-size:10px;font-family:var(--mono);color:var(--lime);text-transform:uppercase;">${stk.name}</span>
+            <span style="font-size:10px;font-family:var(--mono);color:var(--lime);text-transform:uppercase;">${stk.name}${n.mergedInto ? ' · MERGED' : ''}</span>
             <div style="font-weight:600;font-size:13px;margin-top:2px;">${escapeHtml(n.title)}</div>
           </div>
           <span style="font-size:10px;color:var(--ink-50);white-space:nowrap;margin-left:8px;">${doneDate}</span>
         </div>
         ${tagsHtml ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">${tagsHtml}</div>` : ''}
-        <div style="display:flex;gap:6px;margin-top:8px;">
-          <button class="btn-sm" style="flex:1;" onclick="LazNote.reviveNote('${n.id}')">↺ Revive</button>
-          <button class="btn-sm" onclick="LazNote.printSelected(JSON.stringify(['${n.id}']))" title="Export">📤</button>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+          ${n.mergedInto ? `<button class="btn-sm" style="flex:1;color:var(--lime);" onclick="LazNote.unmergeFromArchive('${n.id}')">↺ Unmerge</button>` : `<button class="btn-sm" style="flex:1;" onclick="LazNote.reviveNote('${n.id}')">↺ Revive</button>`}
+          <button class="btn-sm has-tip" data-tip="Export" onclick="LazNote.printSelected(JSON.stringify(['${n.id}']))">📤</button>
           <button class="btn-sm" onclick="LazNote.trashFromArchive('${n.id}')" style="color:var(--red);">🗑 Trash</button>
         </div>
       </div>`;
@@ -874,16 +962,52 @@ function renderSettings() {
   $('#settings-body').innerHTML = `
     <div class="section-label">Appearance</div>
     <div class="section-group">
-      <div class="row"><span class="r-label">Style</span>
-        <div class="seg" id="seg-style">
-          <button data-v="hifi" class="${s.style === 'hifi' ? 'on' : ''}">HiFi</button>
-          <button data-v="industrial" class="${s.style === 'industrial' ? 'on' : ''}">Industrial</button>
+      <div class="row" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <span class="r-label">Style</span>
+        <div class="style-preview" id="seg-style">
+          <div class="style-preview-tile lush ${s.style !== 'industrial' ? 'on' : ''}" data-v="hifi">
+            <div class="sp-name">Lush</div>
+            <div class="sp-sample">Soft glow · rounded</div>
+          </div>
+          <div class="style-preview-tile industrial ${s.style === 'industrial' ? 'on' : ''}" data-v="industrial">
+            <div class="sp-name">Industrial</div>
+            <div class="sp-sample">Grid · mono · sharp</div>
+          </div>
         </div>
       </div>
       <div class="row"><span class="r-label">Theme</span>
         <div class="seg" id="seg-theme">
           <button data-v="dark" class="${s.theme === 'dark' ? 'on' : ''}">Dark</button>
           <button data-v="light" class="${s.theme === 'light' ? 'on' : ''}">Light</button>
+        </div>
+      </div>
+      <div class="row" style="flex-direction:column;align-items:stretch;gap:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="r-label">Accent color</span>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--ink-50);letter-spacing:0.06em;" id="accent-current">${(s.accent || '#c5ec3a').toUpperCase()}</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;" id="accent-swatches">
+          ${[
+            ['#c5ec3a', 'Lime'],
+            ['#f5b133', 'Amber'],
+            ['#ef5350', 'Coral'],
+            ['#3ecfb8', 'Teal'],
+            ['#7c8cff', 'Indigo'],
+            ['#e879f9', 'Magenta'],
+            ['#ffd166', 'Honey'],
+            ['#ffffff', 'Mono']
+          ].map(([hex, name]) => `
+            <button class="accent-sw ${(s.accent || '#c5ec3a').toLowerCase() === hex.toLowerCase() ? 'on' : ''}"
+              data-color="${hex}" title="${name}"
+              style="width:32px;height:32px;border-radius:8px;background:${hex};border:2px solid ${(s.accent || '#c5ec3a').toLowerCase() === hex.toLowerCase() ? '#fff' : 'var(--line-2)'};cursor:pointer;padding:0;position:relative;"
+              aria-label="${name} accent">
+            </button>
+          `).join('')}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="color" id="accent-custom" value="${s.accent || '#c5ec3a'}" style="width:38px;height:34px;border:1px solid var(--line-2);border-radius:6px;background:transparent;padding:2px;cursor:pointer;">
+          <input class="input" id="accent-hex" type="text" placeholder="#RRGGBB" value="${(s.accent || '#c5ec3a').toUpperCase()}" maxlength="7" style="flex:1;font-family:var(--mono);font-size:12px;text-transform:uppercase;">
+          <button class="btn" id="accent-reset" style="font-size:11px;padding:8px 12px;" onclick="LazNote.resetAccent()">Reset</button>
         </div>
       </div>
     </div>
@@ -903,6 +1027,24 @@ function renderSettings() {
       <div class="row" data-tog="showWhy"><span class="r-label">Show "why" suggestions</span><div class="toggle ${s.showWhy ? 'on' : ''}"></div></div>
     </div>
 
+    <div class="section-label">Merge history</div>
+    <div class="section-group" id="merge-history-group">
+      ${(s.mergeHistory && s.mergeHistory.length) ? s.mergeHistory.slice(0, 20).map(snap => {
+        const keep = state.notes.find(n => n.id === snap.keepId);
+        const dup  = state.notes.find(n => n.id === snap.dupId);
+        const ts = new Date(snap.mergedAt).toLocaleString();
+        const keepLbl = keep ? escapeHtml(keep.title) : '(deleted)';
+        const dupLbl  = dup  ? escapeHtml(dup.title)  : '(deleted)';
+        return `<div class="row" style="flex-direction:column;align-items:flex-start;gap:6px;cursor:default;">
+          <div style="font-size:12px;color:var(--ink);"><strong>${dupLbl}</strong> → <span style="color:var(--lime);">${keepLbl}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:8px;">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--ink-50);">${ts}</span>
+            <button class="btn-sm" onclick="LazNote.unmergeByTimestamp(${snap.mergedAt})" style="color:var(--lime);">↺ Unmerge</button>
+          </div>
+        </div>`;
+      }).join('') : '<div class="row" style="cursor:default;"><span class="r-label" style="color:var(--ink-50);font-size:12px;">No merges yet. Use Scan to find and combine similar notes.</span></div>'}
+    </div>
+
     <div class="section-label">Data</div>
     <div class="section-group">
       <div class="row" onclick="LazNote.exportJSON()"><span class="r-label">Export JSON</span><span class="r-value">${state.notes.length} notes</span></div>
@@ -910,11 +1052,16 @@ function renderSettings() {
       <div class="row" onclick="LazNote.wipe()"><span class="r-label" style="color:var(--red);">Delete all notes</span></div>
     </div>
 
+    <div class="section-label">Tour &amp; learning</div>
+    <div class="section-group">
+      <div class="row" onclick="LazNote.replayTour()"><span class="r-label">Replay tour</span><span class="r-value">6 cards</span><svg class="r-chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 5l5 5-5 5"/></svg></div>
+    </div>
+
     <div class="section-label">About</div>
     <div class="section-group">
       <div class="row" onclick="document.getElementById('about-modal').style.display='flex'"><span class="r-label">About LazNote</span><svg class="r-chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 5l5 5-5 5"/></svg></div>
       <div class="row" onclick="document.getElementById('help-modal').style.display='flex'"><span class="r-label">Help &amp; FAQ</span><svg class="r-chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 5l5 5-5 5"/></svg></div>
-      <div class="row"><span class="r-label">Version</span><span class="r-value">3.0</span></div>
+      <div class="row"><span class="r-label">Version</span><span class="r-value">4.3</span></div>
       <div class="row"><span class="r-label">Storage</span><span class="r-value">Local · IndexedDB</span></div>
     </div>
   `;
@@ -922,12 +1069,41 @@ function renderSettings() {
   $$('#settings-body [data-tog]').forEach(r => r.addEventListener('click', async () => {
     const k = r.dataset.tog; state.settings[k] = !state.settings[k]; await saveSettings(); renderSettings();
   }));
-  $$('#seg-style button').forEach(b => b.addEventListener('click', async () => {
+  // Style — now uses .style-preview-tile elements (or legacy buttons as fallback)
+  $$('#seg-style .style-preview-tile, #seg-style button').forEach(b => b.addEventListener('click', async () => {
     state.settings.style = b.dataset.v; applyTheme(); await saveSettings(); renderSettings();
   }));
   $$('#seg-theme button').forEach(b => b.addEventListener('click', async () => {
     state.settings.theme = b.dataset.v; applyTheme(); await saveSettings(); renderSettings();
   }));
+
+  // Accent color — preset swatches
+  $$('#accent-swatches .accent-sw').forEach(sw => sw.addEventListener('click', async () => {
+    await LazNote.setAccent(sw.dataset.color);
+    renderSettings();
+  }));
+  // Accent color — native color picker
+  const customInput = document.getElementById('accent-custom');
+  if (customInput) {
+    customInput.addEventListener('input', e => LazNote.setAccent(e.target.value, false));
+    customInput.addEventListener('change', async e => {
+      await LazNote.setAccent(e.target.value, true);
+      renderSettings();
+    });
+  }
+  // Accent color — hex text input
+  const hexInput = document.getElementById('accent-hex');
+  if (hexInput) {
+    hexInput.addEventListener('change', async e => {
+      const v = e.target.value.trim();
+      if (/^#?[0-9a-fA-F]{6}$/.test(v)) {
+        await LazNote.setAccent(v.startsWith('#') ? v : '#' + v, true);
+        renderSettings();
+      } else {
+        hexInput.value = (state.settings.accent || '#c5ec3a').toUpperCase();
+      }
+    });
+  }
 }
 
 // ─── Groq detail ──────────────────────────────────────────
@@ -951,8 +1127,9 @@ function renderGroq() {
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;">
       <button class="btn" style="flex:1;" onclick="LazNote.editKey()">${s.groqKey ? 'Replace' : 'Save'}</button>
-      <button class="btn" style="flex:1;" onclick="LazNote.testKey()" ${s.groqKey ? '' : 'disabled'}>Test</button>
+      <button class="btn" id="groq-test-btn" style="flex:1;" onclick="LazNote.testKey()">Test</button>
     </div>
+    <div id="groq-test-result" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.5;"></div>
 
     <div class="section-label">Models per task</div>
     <div class="section-group">
@@ -970,8 +1147,58 @@ function renderGroq() {
 const LazNote = {
   go: nav,
   back,
+  openCapture,
   closeCapture,
   saveCapture,
+  // Skip the onboarding tour
+  async skipOnboarding() {
+    if (!confirm('Skip the tour? You can re-open it from Settings → Help.')) return;
+    state.settings.onboarded = true;
+    await saveSettings();
+    nav('blade');
+  },
+  // Replay the onboarding tour from settings
+  replayTour() {
+    onbIdx = 0;
+    renderOnb();
+    nav('onb', false);
+  },
+  // Autogrow textarea — used by capture text mode
+  autosize(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    const cap = Math.round(window.innerHeight * 0.5);
+    const next = Math.min(el.scrollHeight, cap);
+    el.style.height = next + 'px';
+    // When at the cap, allow internal scrolling
+    el.style.overflowY = el.scrollHeight > cap ? 'auto' : 'hidden';
+  },
+  // Desktop column toggle (1 or 2 cols for main feed)
+  setDesktopCols(n) {
+    document.body.classList.remove('desktop-cols-1', 'desktop-cols-2');
+    document.body.classList.add('desktop-cols-' + n);
+    state.settings.desktopCols = n;
+    saveSettings();
+    document.querySelectorAll('#ds-col-toggle button').forEach(b => {
+      b.classList.toggle('on', String(b.dataset.cols) === String(n));
+    });
+  },
+  // Accent color setter — used by swatch + native color picker + hex input
+  async setAccent(hex, persist = true) {
+    if (!hex) return;
+    hex = hex.trim();
+    if (!hex.startsWith('#')) hex = '#' + hex;
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+    state.settings.accent = hex;
+    applyAccent(hex);
+    if (persist) await saveSettings();
+  },
+  async resetAccent() {
+    state.settings.accent = '#c5ec3a';
+    applyAccent('#c5ec3a');
+    await saveSettings();
+    renderSettings();
+  },
   // ── SEARCH ──────────────────────────────────────────
   search() {
     const modal = document.getElementById('search-modal');
@@ -1044,11 +1271,77 @@ const LazNote = {
     renderGroq();
   },
   async testKey() {
-    toast('Testing…', 'lime');
+    const btn    = document.getElementById('groq-test-btn');
+    const result = document.getElementById('groq-test-result');
+    const input  = document.getElementById('groq-key-input');
+
+    // If user typed something that looks like a fresh key (not just the masked placeholder),
+    // use the input value instead of the stored one.
+    const typed = input?.value.trim() || '';
+    const looksMasked = typed.startsWith('••');
+    const useTyped = typed && !looksMasked && typed.startsWith('gsk_');
+
+    const keyToTest = useTyped ? typed : state.settings.groqKey;
+    if (!keyToTest) {
+      result.style.display = 'block';
+      result.style.background = 'rgba(239,83,80,0.08)';
+      result.style.border = '1px solid rgba(239,83,80,0.3)';
+      result.style.color = '#ff7066';
+      result.innerHTML = '<strong>No key to test.</strong> Paste a Groq key starting with <code>gsk_</code> and tap Save first, or paste a fresh key and tap Test.';
+      return;
+    }
+
+    // Show "testing…" state
+    result.style.display = 'block';
+    result.style.background = 'rgba(197,236,58,0.08)';
+    result.style.border = '1px solid rgba(197,236,58,0.25)';
+    result.style.color = 'var(--ink)';
+    result.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--lime);margin-right:8px;vertical-align:-1px;animation:pulse 1s infinite;"></span>Testing key against api.groq.com…';
+    btn.disabled = true;
+    btn.textContent = 'Testing…';
+
+    const t0 = Date.now();
     try {
-      const out = await groqChat({ model: MODELS.sort, messages: [{ role: 'user', content: 'Reply with the single word: ok' }] });
-      toast(out.toLowerCase().includes('ok') ? 'Connected ✓' : 'Got response · ' + out.slice(0, 30), 'lime');
-    } catch (e) { toast(e.message.slice(0, 60)); }
+      // Direct fetch so we test the typed key without overwriting saved state
+      const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${keyToTest}` },
+        body: JSON.stringify({
+          model: MODELS.sort,
+          messages: [{ role: 'user', content: 'Reply with the single word: ok' }],
+          temperature: 0.2
+        })
+      });
+      const ms = Date.now() - t0;
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        let msg = `HTTP ${resp.status}`;
+        try { const j = JSON.parse(txt); msg = j.error?.message || msg; } catch(_) {}
+        result.style.background = 'rgba(239,83,80,0.08)';
+        result.style.border = '1px solid rgba(239,83,80,0.3)';
+        result.style.color = '#ff7066';
+        result.innerHTML = `<strong>✗ Failed</strong> · ${escapeHtml(msg.slice(0,140))}`;
+      } else {
+        const data = await resp.json();
+        const out = data?.choices?.[0]?.message?.content || '';
+        const ok = out.toLowerCase().includes('ok');
+        result.style.background = 'rgba(197,236,58,0.08)';
+        result.style.border = '1px solid rgba(197,236,58,0.3)';
+        result.style.color = 'var(--lime)';
+        result.innerHTML = ok
+          ? `<strong>✓ Connected</strong> · ${ms}ms · model <code>${MODELS.sort}</code> replied "ok"`
+          : `<strong>✓ Reachable</strong> · ${ms}ms · model replied: ${escapeHtml(out.slice(0,80))}`;
+      }
+    } catch (e) {
+      result.style.background = 'rgba(239,83,80,0.08)';
+      result.style.border = '1px solid rgba(239,83,80,0.3)';
+      result.style.color = '#ff7066';
+      result.innerHTML = `<strong>✗ Network error</strong> · ${escapeHtml((e.message || String(e)).slice(0,140))}`;
+    } finally {
+      btn.disabled = !state.settings.groqKey && !useTyped;
+      btn.textContent = 'Test';
+    }
   },
   // ── NOTE LIFECYCLE ──────────────────────────────────
   async confirmAirlock() {
@@ -1123,74 +1416,270 @@ const LazNote = {
   scanNotes() {
     const active = state.notes.filter(n => n.status === 'active');
     if (active.length < 2) { toast('Need 2+ notes to scan'); return; }
-    const seen = new Set(); const groups = [];
+    const seen = new Set();
+    const groups = [];
     active.forEach(note => {
       if (seen.has(note.id)) return;
       const similar = findSimilarNotes(note.id);
-      if (similar.length) { groups.push({ anchor: note, matches: similar }); similar.forEach(s => seen.add(s.note.id)); seen.add(note.id); }
+      if (similar.length) {
+        // Include the anchor itself in the group so user can re-pick anchor
+        const memberIds = [note.id, ...similar.map(s => s.note.id)];
+        groups.push({ id: 'g' + uid(), anchorId: note.id, memberIds, similar });
+        memberIds.forEach(id => seen.add(id));
+      }
     });
-    const body = document.getElementById('scan-body');
-    if (!groups.length) {
-      body.innerHTML = '<div style="text-align:center;padding:30px 0;"><div style="font-size:36px;margin-bottom:10px;">✓</div><div style="color:var(--ink-70);">No similar notes found. All notes are unique!</div></div>';
-    } else {
-      body.innerHTML = '<div style="font-family:var(--mono);font-size:10px;color:var(--lime);letter-spacing:0.12em;margin-bottom:14px;">' + groups.length + ' GROUP(S) — CLICK MERGE TO COMBINE</div>' +
-        groups.map(g => '<div style="border:1px solid var(--line-2);border-radius:10px;overflow:hidden;margin-bottom:12px;">' +
-          '<div style="padding:12px 14px;background:var(--surface);border-bottom:1px solid var(--line-2);">' +
-          '<div style="font-size:12px;font-weight:600;">ANCHOR: ' + escapeHtml(g.anchor.title) + '</div>' +
-          '<div style="font-size:11px;color:var(--ink-50);margin-top:2px;">' + stackById(g.anchor.stack).name + ' · ' + new Date(g.anchor.createdAt).toLocaleDateString() + '</div>' +
-          '</div>' +
-          g.matches.slice(0,3).map(m => '<div style="padding:10px 14px;border-top:1px solid var(--line-2);">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
-            '<span style="font-size:12px;font-weight:500;">' + escapeHtml(m.note.title) + '</span>' +
-            '<span style="background:rgba(197,236,58,0.15);color:var(--lime);padding:2px 8px;border-radius:10px;font-size:10px;font-family:var(--mono);">' + m.score + '%</span>' +
-            '</div><div style="font-size:11px;color:var(--ink-50);margin-bottom:8px;">' + m.reasons.join(' · ') + '</div>' +
-            '<div style="display:flex;gap:6px;">' +
-            '<button class="btn-sm" style="flex:1;" onclick="LazNote.mergeNotes(\'' + g.anchor.id + '\',\'' + m.note.id + '\')">Merge into anchor</button>' +
-            '<button class="btn-sm" onclick="document.getElementById(\'scan-modal\').style.display=\'none\';openNote(\'' + m.note.id + '\')">Open</button>' +
-            '</div></div>').join('') +
-          '</div>').join('') +
-        '<div style="font-size:11px;color:var(--ink-50);margin-top:4px;">Merge combines metadata and archives the duplicate.</div>';
-    }
-    document.getElementById('scan-modal').style.display = 'block';
+    state._scanGroups = groups;
+    LazNote._renderScanBody();
+    document.getElementById('scan-modal').style.display = 'flex';
   },
-  async mergeNotes(keepId, archiveId) {
-    const keep    = state.notes.find(n => n.id === keepId);
-    const dup     = state.notes.find(n => n.id === archiveId);
+
+  _renderScanBody() {
+    const body = document.getElementById('scan-body');
+    const groups = state._scanGroups || [];
+    if (!groups.length) {
+      body.innerHTML = '<div style="text-align:center;padding:30px 0;"><div style="font-size:36px;margin-bottom:10px;">✓</div><div style="color:var(--ink-70);">No similar notes found. All notes are unique.</div></div>';
+      return;
+    }
+    body.innerHTML =
+      '<div style="font-family:var(--mono);font-size:10px;color:var(--lime);letter-spacing:0.12em;margin-bottom:14px;">' + groups.length + ' GROUP' + (groups.length===1?'':'S') + ' · YOU PICK THE ANCHOR · WE ASK BEFORE MERGING</div>' +
+      groups.map(g => {
+        const anchor = state.notes.find(n => n.id === g.anchorId);
+        if (!anchor) return '';
+        const matches = g.memberIds.filter(id => id !== g.anchorId).map(id => {
+          const matchNote = state.notes.find(n => n.id === id);
+          const simData = g.similar.find(s => s.note.id === id) || findSimilarNotes(g.anchorId).find(s => s.note.id === id);
+          return { note: matchNote, ...(simData || { score: 0, reasons: [] }) };
+        }).filter(m => m.note);
+
+        // Anchor selector dropdown — list all members
+        const anchorOptions = g.memberIds.map(id => {
+          const m = state.notes.find(n => n.id === id);
+          if (!m) return '';
+          const lbl = (m.title || m.text.slice(0,40)).slice(0,50);
+          const date = new Date(m.createdAt).toLocaleDateString();
+          return `<option value="${id}" ${id === g.anchorId ? 'selected' : ''}>${escapeHtml(lbl)} · ${date}</option>`;
+        }).join('');
+
+        return '<div class="scan-group-card">' +
+          '<div class="scan-group-header">' +
+            '<div class="scan-group-anchor-label">Anchor (the note everything merges into)</div>' +
+            `<select class="anchor-select" onchange="LazNote.setGroupAnchor('${g.id}', this.value)">` + anchorOptions + '</select>' +
+            `<div style="font-size:11px;color:var(--ink-50);margin-top:8px;line-height:1.5;">${escapeHtml((anchor.text||'').slice(0,140))}${(anchor.text||'').length > 140 ? '…' : ''}</div>` +
+            `<div style="font-size:10px;color:var(--ink-50);margin-top:6px;font-family:var(--mono);">${stackById(anchor.stack).name.toUpperCase()} · ${new Date(anchor.createdAt).toLocaleDateString()}</div>` +
+          '</div>' +
+          matches.map(m =>
+            '<div class="scan-match">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px;">' +
+                `<span style="font-size:12px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(m.note.title)}</span>` +
+                `<span style="background:rgba(197,236,58,0.15);color:var(--lime);padding:2px 8px;border-radius:10px;font-size:10px;font-family:var(--mono);flex-shrink:0;">${m.score}%</span>` +
+              '</div>' +
+              `<div class="scan-match-preview">${escapeHtml((m.note.text||'').slice(0,120))}</div>` +
+              `<div style="font-size:11px;color:var(--ink-50);margin-bottom:8px;">${m.reasons.join(' · ')}</div>` +
+              '<div style="display:flex;gap:6px;">' +
+                `<button class="btn-sm" style="flex:1;background:var(--lime);color:#0b0d0a;border-color:var(--lime);font-weight:600;" onclick="LazNote.requestMerge('${g.anchorId}','${m.note.id}')">Merge →</button>` +
+                `<button class="btn-sm" onclick="document.getElementById('scan-modal').style.display='none';openNote('${m.note.id}')">Open</button>` +
+              '</div>' +
+            '</div>'
+          ).join('') +
+        '</div>';
+      }).join('') +
+      '<div style="font-size:11px;color:var(--ink-50);margin-top:10px;line-height:1.5;">Merging combines tags &amp; links into the anchor, appends the duplicate\'s text, and archives the duplicate. You can undo or unmerge later from the merge history (Settings) or the Archive.</div>';
+  },
+
+  setGroupAnchor(groupId, newAnchorId) {
+    const g = (state._scanGroups || []).find(x => x.id === groupId);
+    if (!g) return;
+    g.anchorId = newAnchorId;
+    LazNote._renderScanBody();
+  },
+
+  // Show confirmation modal before actually merging
+  requestMerge(anchorId, dupId) {
+    const anchor = state.notes.find(n => n.id === anchorId);
+    const dup    = state.notes.find(n => n.id === dupId);
+    if (!anchor || !dup) return;
+    state._pendingMerge = { anchorId, dupId };
+
+    const sim = findSimilarNotes(anchorId).find(s => s.note.id === dupId);
+    const matchInfo = sim
+      ? `<div style="font-family:var(--mono);font-size:10px;color:var(--lime);">${sim.score}% MATCH · ${sim.reasons.join(' · ')}</div>`
+      : '';
+
+    document.getElementById('merge-confirm-body').innerHTML =
+      matchInfo +
+      '<div class="merge-confirm-preview anchor">' +
+        '<div class="merge-confirm-label">✓ ANCHOR · this note stays</div>' +
+        `<div class="merge-confirm-title">${escapeHtml(anchor.title)}</div>` +
+        `<div class="merge-confirm-body">${escapeHtml(anchor.text || '')}</div>` +
+        `<div class="merge-confirm-meta">${stackById(anchor.stack).name.toUpperCase()} · ${new Date(anchor.createdAt).toLocaleDateString()}</div>` +
+      '</div>' +
+      '<div class="merge-arrow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 19 19 12"/></svg></div>' +
+      '<div class="merge-confirm-preview">' +
+        '<div class="merge-confirm-label">→ Will be archived</div>' +
+        `<div class="merge-confirm-title">${escapeHtml(dup.title)}</div>` +
+        `<div class="merge-confirm-body">${escapeHtml(dup.text || '')}</div>` +
+        `<div class="merge-confirm-meta">${stackById(dup.stack).name.toUpperCase()} · ${new Date(dup.createdAt).toLocaleDateString()}</div>` +
+      '</div>' +
+      '<div class="confirm-warning">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--lime)" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
+        '<div>Tags, hashtags &amp; linked topics from both notes will combine into the anchor. The duplicate\'s full text is appended at the bottom. You\'ll have <strong>8 seconds to undo</strong> after, plus a permanent unmerge option in Settings → Merge history.</div>' +
+      '</div>' +
+      '<div class="confirm-actions">' +
+        '<button class="btn ghost" style="flex:1;" onclick="LazNote.cancelMergeConfirm()">Cancel</button>' +
+        '<button class="btn primary" style="flex:1;" onclick="LazNote.confirmMerge()">Confirm merge</button>' +
+      '</div>';
+
+    document.getElementById('merge-confirm-modal').style.display = 'flex';
+  },
+
+  cancelMergeConfirm() {
+    state._pendingMerge = null;
+    document.getElementById('merge-confirm-modal').style.display = 'none';
+  },
+
+  async confirmMerge() {
+    const pm = state._pendingMerge;
+    if (!pm) return;
+    document.getElementById('merge-confirm-modal').style.display = 'none';
+    await LazNote._performMerge(pm.anchorId, pm.dupId);
+    state._pendingMerge = null;
+  },
+
+  // Internal merge worker - stores snapshot for undo
+  async _performMerge(keepId, archiveId) {
+    const keep = state.notes.find(n => n.id === keepId);
+    const dup  = state.notes.find(n => n.id === archiveId);
     if (!keep || !dup) return;
 
-    // ── Merge metadata into anchor ──────────────────────
+    // Snapshot original state for undo
+    const snapshot = {
+      keepId: keep.id,
+      dupId:  dup.id,
+      keepBefore: {
+        text: keep.text,
+        tags: [...(keep.tags || [])],
+        hashtags: [...(keep.hashtags || [])],
+        links: [...(keep.links || [])],
+        updatedAt: keep.updatedAt
+      },
+      dupBefore: {
+        status: dup.status,
+        done: dup.done,
+        doneAt: dup.doneAt,
+        mergedInto: dup.mergedInto,
+        tags: [...(dup.tags || [])],
+        hashtags: [...(dup.hashtags || [])],
+        text: dup.text
+      },
+      mergedAt: Date.now()
+    };
+
+    // ── Merge metadata into anchor ──
     keep.tags     = [...new Set([...(keep.tags||[]),    ...(dup.tags||[])])];
     keep.hashtags = [...new Set([...(keep.hashtags||[]),...(dup.hashtags||[])])];
     keep.links    = [...new Set([...(keep.links||[]),   ...(dup.links||[])])];
 
-    // Append duplicate's text as a pinned block in the anchor
     const dupDate = new Date(dup.createdAt).toLocaleDateString();
     keep.text = keep.text.trimEnd() +
       `\n\n── Merged from "${dup.title}" (${dupDate}) ──\n${dup.text.trim()}`;
     keep.updatedAt = Date.now();
-    // Re-extract hashtags from combined text
     keep.hashtags = [...new Set([...extractHashtags(keep.text), ...(keep.hashtags||[])])];
 
-    // ── Archive duplicate with merge metadata ────────────
+    // ── Archive duplicate with merge metadata ──
     dup.status     = 'done';
     dup.done       = true;
     dup.doneAt     = Date.now();
     dup.mergedInto = keepId;
-    // Tag it so it's findable
     dup.tags       = [...new Set([...(dup.tags||[]), 'merged'])];
     dup.hashtags   = [...new Set([...(dup.hashtags||[]), 'merged'])];
-    // Append reference so user knows where it went
     dup.text       = dup.text.trimEnd() +
       `\n\n── Merged into: "${keep.title}" on ${new Date().toLocaleDateString()} ──`;
 
     await idbPut('notes', keep);
     await idbPut('notes', dup);
 
-    // Close scan modal and open the anchor note
-    document.getElementById('scan-modal').style.display = 'none';
+    // Append to merge history
+    state.settings.mergeHistory = state.settings.mergeHistory || [];
+    state.settings.mergeHistory.unshift(snapshot);
+    if (state.settings.mergeHistory.length > 100) state.settings.mergeHistory.length = 100;
+    await saveSettings();
+
     renderBlade();
-    toast('✓ Merged — opening anchor note', 'lime');
-    openNote(keepId);
+    if (state.view === 'archive') renderArchive();
+
+    // Refresh scan groups if scan modal is open (remove merged dup from the list)
+    if (state._scanGroups) {
+      state._scanGroups = state._scanGroups.map(g => {
+        const newMembers = g.memberIds.filter(id => id !== archiveId);
+        // If the anchor was merged away (shouldn't happen, but defensive), or only 1 member left, drop group
+        if (newMembers.length < 2) return null;
+        return { ...g, memberIds: newMembers };
+      }).filter(Boolean);
+      if (document.getElementById('scan-modal').style.display !== 'none') {
+        LazNote._renderScanBody();
+      }
+    }
+
+    // Show undo toast
+    showUndoToast(`Merged into "${keep.title}"`, () => LazNote.unmergeBySnapshot(snapshot));
+  },
+
+  // Restore a merge using a saved snapshot
+  async unmergeBySnapshot(snapshot) {
+    const keep = state.notes.find(n => n.id === snapshot.keepId);
+    const dup  = state.notes.find(n => n.id === snapshot.dupId);
+    if (!keep || !dup) { toast('Could not unmerge — note missing'); return; }
+
+    // Restore anchor
+    keep.text     = snapshot.keepBefore.text;
+    keep.tags     = [...snapshot.keepBefore.tags];
+    keep.hashtags = [...snapshot.keepBefore.hashtags];
+    keep.links    = [...snapshot.keepBefore.links];
+    keep.updatedAt = Date.now();
+
+    // Restore duplicate
+    dup.status     = snapshot.dupBefore.status;
+    dup.done       = snapshot.dupBefore.done;
+    dup.doneAt     = snapshot.dupBefore.doneAt;
+    dup.mergedInto = snapshot.dupBefore.mergedInto;
+    dup.tags       = [...snapshot.dupBefore.tags];
+    dup.hashtags   = [...snapshot.dupBefore.hashtags];
+    dup.text       = snapshot.dupBefore.text;
+
+    await idbPut('notes', keep);
+    await idbPut('notes', dup);
+
+    // Remove from merge history
+    state.settings.mergeHistory = (state.settings.mergeHistory || []).filter(s => s.mergedAt !== snapshot.mergedAt);
+    await saveSettings();
+
+    renderBlade();
+    if (state.view === 'archive') renderArchive();
+    if (state.view === 'settings') renderSettings();
+    toast('↺ Unmerged · notes restored', 'lime');
+  },
+
+  // Unmerge from settings UI (looks up by mergedAt timestamp)
+  async unmergeByTimestamp(mergedAt) {
+    const snap = (state.settings.mergeHistory || []).find(s => s.mergedAt === mergedAt);
+    if (!snap) { toast('Merge record not found'); return; }
+    if (!confirm('Unmerge these notes? The anchor will be restored to its previous state and the duplicate will return to active.')) return;
+    await LazNote.unmergeBySnapshot(snap);
+  },
+
+  // Unmerge from Archive view — finds the most recent merge for this dup note
+  async unmergeFromArchive(dupId) {
+    const snaps = (state.settings.mergeHistory || []).filter(s => s.dupId === dupId);
+    if (!snaps.length) { toast('No merge record found for this note'); return; }
+    if (!confirm('Unmerge this note? It will return to active and the anchor will be restored to its previous state.')) return;
+    // Most recent first
+    snaps.sort((a, b) => b.mergedAt - a.mergedAt);
+    await LazNote.unmergeBySnapshot(snaps[0]);
+  },
+
+  // Kept for backward compat: old mergeNotes now routes through confirmation
+  async mergeNotes(keepId, archiveId) {
+    return LazNote.requestMerge(keepId, archiveId);
   },
   // ── PRINT / EXPORT ──────────────────────────────────
   printNote() {
@@ -1333,7 +1822,7 @@ const LazNote = {
       <div>
         <div class="edit-field-label">Urgency</div>
         <div style="display:flex;gap:6px;margin-top:8px;">
-          ${[['high','#c5ec3a'],['med','#ff9900'],['low','var(--ink-50)']].map(([u,c]) => `<span class="chip edit-urg-chip ${n.urgency===u?'lime':''}" data-urg="${u}" onclick="LazNote._editSelectUrgency('${u}')" style="cursor:pointer;${n.urgency===u?'':''}color:${n.urgency===u?'':c};">${u.charAt(0).toUpperCase()+u.slice(1)}</span>`).join('')}
+          ${[['high','var(--lime)'],['med','#ff9900'],['low','var(--ink-50)']].map(([u,c]) => `<span class="chip edit-urg-chip ${n.urgency===u?'lime':''}" data-urg="${u}" onclick="LazNote._editSelectUrgency('${u}')" style="cursor:pointer;${n.urgency===u?'':''}color:${n.urgency===u?'':c};">${u.charAt(0).toUpperCase()+u.slice(1)}</span>`).join('')}
         </div>
       </div>
 
@@ -1568,6 +2057,34 @@ window.LazNote.toggleLogicSection = toggleLogicSection;
 function applyTheme() {
   document.body.classList.toggle('industrial', state.settings.style === 'industrial');
   document.body.classList.toggle('light', state.settings.theme === 'light');
+  applyAccent(state.settings.accent);
+}
+
+// Apply (or clear) the user's chosen accent color by overriding --lime tokens on <body>
+function applyAccent(hex) {
+  const body = document.body;
+  if (!hex || hex === '#c5ec3a' || hex === '#C5EC3A') {
+    // Reset to default lime — remove inline overrides so the CSS variables apply
+    body.style.removeProperty('--lime');
+    body.style.removeProperty('--lime-glow');
+    body.style.removeProperty('--lime-soft');
+    body.style.removeProperty('--accent');
+    return;
+  }
+  const { r, g, b } = hexToRgb(hex);
+  body.style.setProperty('--lime', hex);
+  body.style.setProperty('--accent', hex);
+  body.style.setProperty('--lime-glow', `rgba(${r},${g},${b},0.55)`);
+  body.style.setProperty('--lime-soft', `rgba(${r},${g},${b},0.15)`);
+}
+
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return {
+    r: parseInt(h.slice(0,2), 16),
+    g: parseInt(h.slice(2,4), 16),
+    b: parseInt(h.slice(4,6), 16)
+  };
 }
 
 // ─── Wiring ──────────────────────────────────────────────
@@ -1580,8 +2097,354 @@ document.getElementById('search-input')?.addEventListener('keydown', e => {
   if (e.key === 'Enter') LazNote.doSearch();
 });
 
-// Hardware back button (Android / browser history)
-window.addEventListener('popstate', () => back());
+// ─── Hardware back-button guard ───────────────────────────
+// Strategy: keep one extra history entry as a "guard" so popstate fires
+// instead of the system exiting the app. We consume the popstate, do the
+// right thing (close modal → navigate back → warn before exit), then
+// re-push the guard so we're armed for the next press.
+
+let _backExitArmed = false;       // user pressed back at root once; second press exits
+let _backExitTimer = null;
+const ROOT_VIEW = 'blade';
+
+function _isAnyModalOpen() {
+  const modalIds = [
+    'merge-confirm-modal', 'scan-modal', 'print-modal',
+    'stack-modal', 'input-modal', 'search-modal',
+    'about-modal', 'help-modal', 'note-edit-modal'
+  ];
+  for (const id of modalIds) {
+    const m = document.getElementById(id);
+    if (m && m.style.display && m.style.display !== 'none') return id;
+  }
+  return null;
+}
+
+function _closeTopModal() {
+  const id = _isAnyModalOpen();
+  if (!id) return false;
+  // Special-case the merge confirm so we use our cancel handler (clears state)
+  if (id === 'merge-confirm-modal' && window.LazNote?.cancelMergeConfirm) {
+    LazNote.cancelMergeConfirm();
+  } else {
+    document.getElementById(id).style.display = 'none';
+  }
+  return true;
+}
+
+function _pushBackGuard() {
+  try {
+    history.pushState({ _guard: true, view: state.view }, '', location.href.split('?')[0]);
+  } catch (e) {}
+}
+
+function handleHardwareBack() {
+  // 1. Capture sheet open? Close it.
+  const capture = document.getElementById('capture');
+  if (capture && capture.classList.contains('open')) {
+    closeCapture();
+    _pushBackGuard();
+    return;
+  }
+  // 2. Any modal open? Close the top one.
+  if (_closeTopModal()) {
+    _pushBackGuard();
+    return;
+  }
+  // 3. On desktop with a note open in the edit panel? Close it.
+  if (typeof isDesktop === 'function' && isDesktop() &&
+      document.getElementById('desktop-edit-header')?.style.display !== 'none') {
+    if (typeof closeDesktopEditPanel === 'function') closeDesktopEditPanel();
+    state.currentNoteId = null;
+    _pushBackGuard();
+    return;
+  }
+  // 4. On onboarding? Walk back through the cards.
+  if (state.view === 'onb' && typeof onbIdx !== 'undefined' && onbIdx > 0) {
+    onbIdx--;
+    if (typeof renderOnb === 'function') renderOnb();
+    _pushBackGuard();
+    return;
+  }
+  // 5. Not on root view? Navigate back through the in-app stack.
+  if (state.view !== ROOT_VIEW && state.view !== 'onb') {
+    back();
+    _pushBackGuard();
+    return;
+  }
+  // 6. On root view (or first onb card) → confirm-to-exit pattern.
+  if (_backExitArmed) {
+    // Second press within window — let the system handle it.
+    // Don't re-push the guard; the popstate has already consumed our last entry.
+    // On Android PWA this exits the app; on browsers it goes back in history.
+    return;
+  }
+  _backExitArmed = true;
+  showExitToast();
+  _backExitTimer = setTimeout(() => {
+    _backExitArmed = false;
+    _backExitTimer = null;
+  }, 2200);
+  _pushBackGuard();
+}
+
+// App-themed exit-warning toast (uses the existing undo-toast structure
+// re-purposed for a clean, branded look)
+function showExitToast() {
+  // Reuse the undo-toast element so we get the same styling treatment
+  const wrap = document.getElementById('undo-toast');
+  if (!wrap) { toast('Press back again to exit', 'lime'); return; }
+  // Clear any in-flight undo timers
+  if (typeof _undoToastTimers !== 'undefined') {
+    _undoToastTimers.forEach(t => clearTimeout(t));
+    _undoToastTimers.length = 0;
+  }
+  const msg = document.getElementById('undo-toast-msg');
+  const btn = document.getElementById('undo-toast-btn');
+  const progress = document.getElementById('undo-toast-progress');
+  msg.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lime)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>Press back again to exit LazNote</span>';
+  btn.textContent = 'Stay';
+  btn.onclick = () => {
+    wrap.classList.remove('show');
+    _backExitArmed = false;
+    if (_backExitTimer) { clearTimeout(_backExitTimer); _backExitTimer = null; }
+  };
+  wrap.classList.add('show');
+  // Animate progress bar over 2.2s
+  progress.style.transition = 'none';
+  progress.style.transform = 'scaleX(1)';
+  void progress.offsetWidth;
+  progress.style.transition = 'transform 2200ms linear';
+  progress.style.transform = 'scaleX(0)';
+  setTimeout(() => wrap.classList.remove('show'), 2200);
+}
+
+// Wire popstate to our guard handler. Push the initial guard after boot.
+window.addEventListener('popstate', handleHardwareBack);
+// Push the guard once the page is loaded so the first back press triggers our handler
+window.addEventListener('load', _pushBackGuard);
+
+// ─── Desktop mode (auto at >=1024px) ─────────────────────
+const DESKTOP_MQ = window.matchMedia('(min-width: 1024px)');
+let _desktopActive = false;
+
+function isDesktop() { return DESKTOP_MQ.matches; }
+
+function setupDesktopMode() {
+  if (!isDesktop()) {
+    // Leaving desktop mode → restore views to the shell
+    if (_desktopActive) restoreViewsToShell();
+    _desktopActive = false;
+    return;
+  }
+  if (_desktopActive) return;
+  _desktopActive = true;
+
+  // Re-parent all <div class="view"> elements into desktop main body
+  const mainBody = document.getElementById('desktop-main-body');
+  $$('.view').forEach(v => {
+    if (v.dataset.view === 'note' || v.dataset.view === 'onb') return; // these stay in shell (onb is modal-like; note is edit panel)
+    mainBody.appendChild(v);
+  });
+
+  // Wire sidebar nav clicks
+  $$('.desktop-nav-item[data-go]').forEach(el => {
+    el.addEventListener('click', () => LazNote.go(el.dataset.go));
+  });
+
+  // Default column count
+  const cols = state.settings.desktopCols || 1;
+  LazNote.setDesktopCols(cols);
+
+  // Refresh badges
+  updateDesktopBadges();
+
+  // Sync sidebar active state with current view
+  syncDesktopSidebar();
+  updateDesktopHeader();
+}
+
+function restoreViewsToShell() {
+  const shell = document.getElementById('shell');
+  const sbSpacer = shell.querySelector('.sb-spacer');
+  const onbView = shell.querySelector('[data-view="onb"]');
+  $$('.desktop-main-body .view').forEach(v => {
+    // Insert each view after the onboarding view (or after sb-spacer if onb missing)
+    const anchor = onbView || sbSpacer;
+    if (anchor) anchor.parentNode.insertBefore(v, anchor.nextSibling);
+  });
+}
+
+function syncDesktopSidebar() {
+  $$('.desktop-nav-item').forEach(n => n.classList.toggle('active', n.dataset.go === state.view));
+}
+
+function updateDesktopBadges() {
+  const active = state.notes.filter(n => n.status === 'active').length;
+  const airlock = state.notes.filter(n => n.status === 'airlock').length;
+  const bladeBadge = document.getElementById('ds-blade-count');
+  const airBadge = document.getElementById('ds-airlock-count');
+  if (bladeBadge) { bladeBadge.style.display = active ? '' : 'none'; bladeBadge.textContent = active; }
+  if (airBadge)   { airBadge.style.display = airlock ? '' : 'none'; airBadge.textContent = airlock; }
+}
+
+function updateDesktopHeader() {
+  const titles = {
+    blade: ['Blades', 'All active notes'],
+    cards: ['Cards', 'Grid view'],
+    stacks: ['Stacks', 'Manage your folders'],
+    airlock: ['Airlock', 'AI was unsure · you decide'],
+    archive: ['Archive', 'Completed & trashed notes'],
+    settings: ['Settings', 'Preferences and integrations'],
+    groq:  ['Groq', 'AI configuration'],
+    note:  ['Note', '']
+  };
+  const t = titles[state.view] || ['', ''];
+  const titleEl = document.getElementById('ds-main-title');
+  const subEl = document.getElementById('ds-main-sub');
+  if (titleEl) titleEl.textContent = t[0];
+  if (subEl)   subEl.textContent = t[1];
+
+  // Hide col-toggle on views where it doesn't make sense
+  const colToggle = document.getElementById('ds-col-toggle');
+  if (colToggle) {
+    const showFor = new Set(['blade', 'cards', 'airlock', 'archive']);
+    colToggle.style.display = showFor.has(state.view) ? '' : 'none';
+  }
+}
+
+// Patch nav() to also refresh desktop chrome and open notes in right-panel on desktop
+const _origNav = nav;
+function navWrapper(view, push = true) {
+  if (isDesktop() && view === 'note') {
+    // On desktop, show the note in the right edit panel instead of swapping main
+    renderDesktopEditPanel();
+    syncDesktopSidebar();
+    updateDesktopHeader();
+    return;
+  }
+  _origNav(view, push);
+  if (isDesktop()) {
+    syncDesktopSidebar();
+    updateDesktopHeader();
+    updateDesktopBadges();
+    // If leaving note view, clear edit panel
+    if (view !== 'note') closeDesktopEditPanel();
+  }
+}
+// Override the reference everywhere that goes through LazNote.go
+LazNote.go = navWrapper;
+
+function renderDesktopEditPanel() {
+  const n = state.notes.find(x => x.id === state.currentNoteId);
+  if (!n) { closeDesktopEditPanel(); return; }
+  document.getElementById('desktop-edit-empty').style.display = 'none';
+  const header = document.getElementById('desktop-edit-header');
+  const bodyEl = document.getElementById('desktop-edit-body');
+  header.style.display = '';
+  bodyEl.style.display = '';
+  document.getElementById('desktop-edit-title').textContent = stackById(n.stack).name + ' · ' + n.title;
+
+  // Render essentially the same content as renderNote() into the edit panel body
+  const stk = stackById(n.stack);
+  const d = fmtDue(n.due);
+  const isDone = n.status === 'done';
+  const allHashtags = [...new Set([...(n.hashtags||[]), ...(n.tags||[])])];
+  const hashtagsHtml = allHashtags.length
+    ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px;">${allHashtags.map(t => `<span style="font-size:11px;padding:3px 8px;border-radius:5px;background:rgba(197,236,58,0.12);color:var(--lime);border:1px solid rgba(197,236,58,0.25);">#${t}</span>`).join('')}</div>`
+    : '';
+  bodyEl.innerHTML = `
+    <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--lime);text-transform:uppercase;">${stk.name} · ${d.label}</div>
+    <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;margin-top:6px;line-height:1.3;">${escapeHtml(n.title)}</div>
+    <textarea class="input" id="note-text" style="margin-top:12px;min-height:280px;${isDone ? 'opacity:0.7;' : ''}" ${isDone ? 'readonly' : ''}>${escapeHtml(n.text)}</textarea>
+    ${hashtagsHtml}
+    <div style="margin-top:14px;font-family:var(--mono);font-size:10px;color:var(--ink-50);">
+      ${new Date(n.createdAt).toLocaleString()}
+    </div>
+  `;
+
+  // Save on blur
+  const ta = bodyEl.querySelector('#note-text');
+  if (ta) ta.addEventListener('blur', () => LazNote.saveNoteText && LazNote.saveNoteText());
+}
+
+function closeDesktopEditPanel() {
+  document.getElementById('desktop-edit-empty').style.display = '';
+  document.getElementById('desktop-edit-header').style.display = 'none';
+  document.getElementById('desktop-edit-body').style.display = 'none';
+  document.body.classList.remove('desktop-no-edit');
+}
+
+// Patch openNote to route through desktop panel when on desktop
+const _origOpenNote = window.openNote || openNote;
+window.openNote = function(id) {
+  state.currentNoteId = id;
+  if (isDesktop()) {
+    renderDesktopEditPanel();
+    syncDesktopSidebar();
+    updateDesktopHeader();
+  } else {
+    _origOpenNote(id);
+  }
+};
+
+DESKTOP_MQ.addEventListener('change', setupDesktopMode);
+
+// ─── Long-press tooltip for touch devices ────────────────
+(function setupTouchTooltips() {
+  let pressTimer = null;
+  let pressed = null;
+  document.addEventListener('touchstart', e => {
+    const el = e.target.closest('.has-tip[data-tip]');
+    if (!el) return;
+    pressed = el;
+    pressTimer = setTimeout(() => {
+      el.classList.add('show-tip');
+      setTimeout(() => el.classList.remove('show-tip'), 1800);
+    }, 500);
+  }, { passive: true });
+  document.addEventListener('touchend', () => {
+    if (pressTimer) clearTimeout(pressTimer);
+    pressTimer = null;
+    if (pressed) pressed.classList.remove('show-tip');
+    pressed = null;
+  }, { passive: true });
+  document.addEventListener('touchmove', () => {
+    if (pressTimer) clearTimeout(pressTimer);
+    pressTimer = null;
+    if (pressed) pressed.classList.remove('show-tip');
+    pressed = null;
+  }, { passive: true });
+})();
+
+// ─── Keyboard shortcuts (desktop) ────────────────────────
+window.addEventListener('keydown', e => {
+  if (!isDesktop()) return;
+  // Skip when typing in an input/textarea
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) {
+    // Allow Cmd/Ctrl+Enter to save capture even from input
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      const captureOpen = document.getElementById('capture')?.classList.contains('open');
+      if (captureOpen) { e.preventDefault(); LazNote.saveCapture('ai'); }
+    }
+    if (e.key === 'Escape') {
+      const captureOpen = document.getElementById('capture')?.classList.contains('open');
+      if (captureOpen) { e.preventDefault(); LazNote.closeCapture(); }
+    }
+    return;
+  }
+  if (e.key === 'n' || e.key === 'N') { e.preventDefault(); LazNote.openCapture(); }
+  else if (e.key === '/') { e.preventDefault(); LazNote.search(); }
+  else if (e.key === 'Escape') {
+    // Close any open modal
+    ['merge-confirm-modal', 'scan-modal', 'print-modal', 'stack-modal', 'input-modal', 'search-modal', 'about-modal', 'help-modal', 'note-edit-modal'].forEach(id => {
+      const m = document.getElementById(id);
+      if (m && m.style.display !== 'none') m.style.display = 'none';
+    });
+    closeDesktopEditPanel();
+  }
+});
 
 // ─── Boot ────────────────────────────────────────────────
 (async function boot() {
@@ -1590,6 +2453,7 @@ window.addEventListener('popstate', () => back());
     await loadSettings();
     state.notes = await idbAll('notes');
     applyTheme();
+    setupDesktopMode();
     if (!state.settings.onboarded) {
       onbIdx = 0; renderOnb(); nav('onb', false);
     } else {
