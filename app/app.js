@@ -387,22 +387,27 @@ function renderBlade() {
   $('#blade-list').innerHTML = filtered.map(n => {
     const d = fmtDue(n.due);
     const stk = stackById(n.stack);
-    const urgencyColor = n.urgency === 'high' ? '#c5ec3a' : n.urgency === 'med' ? '#ff9900' : '#666';
+    const urgencyColor = n.urgency === 'high' ? 'var(--lime)' : n.urgency === 'med' ? '#ff9900' : '#666';
     const allCardTags = [...new Set([...(n.hashtags||[]), ...(n.tags||[])])];
     const tagsHtml = allCardTags.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0;">${allCardTags.map(t => `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(197,236,58,0.1);color:var(--lime);border:1px solid rgba(197,236,58,0.3);">#${t}</span>`).join('')}</div>` : '';
+    // Build title with fallback for truly empty notes
+    let titleText = (n.title || '').trim();
+    if (!titleText) titleText = (n.text || '').slice(0, 60).trim();
+    if (!titleText) titleText = '(untitled)';
+    const titleIsPlaceholder = titleText === '(untitled)';
     return `<div class="blade ${d.cls}" data-id="${n.id}" style="${n.done ? 'opacity:0.6;' : ''}">
       <div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-          <div style="width:2px;height:20px;background:${urgencyColor};border-radius:1px;"></div>
+          <div style="width:2px;height:20px;background:${urgencyColor};border-radius:1px;flex-shrink:0;"></div>
           <span class="stack-tag">${stk.name.toUpperCase()}</span>
           ${n.done ? '<span style="color:#888;font-size:11px;">✓ DONE</span>' : ''}
         </div>
-        <div class="t">${escapeHtml(n.title || n.text.slice(0, 60))}</div>
-        ${n.text && n.text !== n.title ? `<div class="m">${escapeHtml(n.text.slice(0, 70))}${n.text.length > 70 ? '…' : ''}</div>` : ''}
+        <div class="t"${titleIsPlaceholder ? ' style="color:var(--ink-50);font-style:italic;"' : ''}>${escapeHtml(titleText)}</div>
+        ${n.text && n.text !== n.title && !titleIsPlaceholder ? `<div class="m">${escapeHtml(n.text.slice(0, 70))}${n.text.length > 70 ? '…' : ''}</div>` : ''}
         ${tagsHtml}
       </div>
       <div class="due">${d.label}</div>
-      <div style="position:absolute;top:0;right:0;width:0;height:0;border-style:solid;border-width:0 30px 30px 0;border-color:transparent ${n.done ? '#888' : d.cls === 'now' ? 'var(--lime)' : '#666'} transparent transparent;"></div>
+      <div style="position:absolute;top:0;right:0;width:0;height:0;border-style:solid;border-width:0 30px 30px 0;border-color:transparent ${n.done ? '#888' : d.cls === 'now' ? 'var(--lime)' : '#666'} transparent transparent;pointer-events:none;"></div>
     </div>
     <div style="padding:12px;background:var(--bg-2);border-bottom:1px solid var(--line);display:none;" id="note-actions-${n.id}">
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -1061,7 +1066,7 @@ function renderSettings() {
     <div class="section-group">
       <div class="row" onclick="document.getElementById('about-modal').style.display='flex'"><span class="r-label">About LazNote</span><svg class="r-chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 5l5 5-5 5"/></svg></div>
       <div class="row" onclick="document.getElementById('help-modal').style.display='flex'"><span class="r-label">Help &amp; FAQ</span><svg class="r-chev" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 5l5 5-5 5"/></svg></div>
-      <div class="row"><span class="r-label">Version</span><span class="r-value">4.3</span></div>
+      <div class="row"><span class="r-label">Version</span><span class="r-value">4.4</span></div>
       <div class="row"><span class="r-label">Storage</span><span class="r-value">Local · IndexedDB</span></div>
     </div>
   `;
