@@ -9,10 +9,25 @@ const STACKS_DEFAULT = [
   { id: 'dev',  name: 'Dev',     desc: 'Code · features · bugs · ideas' },
   { id: 'per',  name: 'Personal', desc: 'Health · errands · life admin' }
 ];
-const MODELS = {
-  sort:  'llama-3.1-8b-instant',
-  logic: 'llama-3.3-70b-versatile'
+// Groq retires models every few months (Llama 3.1 8B, Llama 3.3 70B and Llama 4 Scout have all
+// been shut down, and even some of their replacements have already been replaced). So nothing is
+// pinned: with the user's key we ask Groq which models are live and pick one per task.
+// MODEL_FALLBACKS is only a cold-start default for when the live list can't be reached.
+const MODEL_FALLBACKS = {
+  sort:   'openai/gpt-oss-20b',        // fast + cheap: runs on every capture
+  logic:  'openai/gpt-oss-120b',       // quality: summaries, advice, reasoning
+  vision: 'qwen/qwen3.8-27b',          // multimodal: camera / photo scan
+  stt:    'whisper-large-v3-turbo'     // voice → text
 };
+const MODELS = { ...MODEL_FALLBACKS };  // live values; mutated by refreshModels()
+const MODEL_TASKS = [
+  ['sort',   'Sorting'],
+  ['logic',  'Logic / why'],
+  ['vision', 'Scan (vision)'],
+  ['stt',    'Voice (speech-to-text)']
+];
+const MODEL_REFRESH_MS = 24 * 60 * 60 * 1000;   // re-check the live list at most once a day
+const GROQ_BASE = 'https://api.groq.com/openai/v1';
 
 // ─── State ─────────────────────────────────────────────────
 const state = {
@@ -63,29 +78,171 @@ function idbGet(store, key) { return new Promise((res, rej) => { const r = tx(st
 async function loadSettings() {
   const row = await idbGet('kv', 'settings');
   if (row) Object.assign(state.settings, row.v);
+  // Restore the models chosen by the last successful refresh (works offline)
+  const saved = state.settings.models;
+  if (saved && typeof saved === 'object') {
+    Object.keys(MODEL_FALLBACKS).forEach(k => { if (typeof saved[k] === 'string' && saved[k]) MODELS[k] = saved[k]; });
+  }
   const stk = await idbGet('kv', 'stacks');
   if (stk) state.stacks = stk.v;
 }
 async function saveSettings() { return idbPut('kv', { k: 'settings', v: state.settings }); }
 async function saveStacks() { return idbPut('kv', { k: 'stacks', v: state.stacks }); }
 
+// ─── Groq model registry ───────────────────────────────────
+// Ask Groq which models are live for THIS key, then rank them per task. Ranking is by pattern
+// (not exact id) and prefers the newest version inside a family, so e.g. a future
+// qwen3.9-27b is picked up automatically without an app update.
+const NON_CHAT = /whisper|tts|orpheus|guard|safeguard|embed|compound|rerank|moderation|allam|playai/i;
+const MODEL_PREFS = {
+  sort:   [/gpt-oss-20b/i, /instant|flash|mini|lite/i],
+  logic:  [/gpt-oss-120b/i, /qwen\d*(?:\.\d+)?-(?:27|32|72)b/i, /versatile|70b/i],
+  vision: [/qwen\d*(?:\.\d+)?-\d+b/i, /llama-4-(?:maverick|scout)/i, /vision|pixtral|llava|gemma-?3/i],
+  stt:    [/^whisper-large-v3$/i, /whisper-large-v3-turbo/i, /whisper/i]
+};
+function modelKind(id) { return /whisper/i.test(id) ? 'stt' : NON_CHAT.test(id) ? 'other' : 'chat'; }
+function paramSize(id) { const m = id.match(/(\d+(?:\.\d+)?)b(?![a-z])/i); return m ? parseFloat(m[1]) : null; }
+function versionTokens(id) { return (id.match(/\d+(?:\.\d+)*/g) || []).map(t => t.split('.').map(Number)); }
+function cmpSegs(a, b) { for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) return d; } return 0; }
+// newest first; preview builds sink below production builds
+function newestFirst(a, b) {
+  const pv = (/preview/i.test(a) ? 1 : 0) - (/preview/i.test(b) ? 1 : 0);
+  if (pv) return pv;
+  const ta = versionTokens(a), tb = versionTokens(b);
+  for (let i = 0; i < Math.max(ta.length, tb.length); i++) { const d = cmpSegs(tb[i] || [0], ta[i] || [0]); if (d) return d; }
+  return 0;
+}
+function rankModels(task, ids) {
+  const pool = ids.filter(id => task === 'stt' ? modelKind(id) === 'stt' : modelKind(id) === 'chat');
+  const out = [];
+  const push = id => { if (!out.includes(id)) out.push(id); };
+  (MODEL_PREFS[task] || []).forEach(re => pool.filter(id => re.test(id)).sort(newestFirst).forEach(push));
+  // Nothing recognisable? Fall back on size: smallest sane model for sorting, biggest for reasoning.
+  const sized = pool.filter(id => paramSize(id) != null);
+  if (task === 'sort')  sized.filter(id => paramSize(id) >= 7).sort((a, b) => paramSize(a) - paramSize(b)).forEach(push);
+  if (task === 'logic') sized.sort((a, b) => paramSize(b) - paramSize(a)).forEach(push);
+  return out;
+}
+// Returns true when any task's model changed
+function applyModelList(ids) {
+  state._ranked = {};
+  let changed = false;
+  Object.keys(MODEL_FALLBACKS).forEach(task => {
+    const ranked = rankModels(task, ids);
+    state._ranked[task] = ranked;
+    const next = ranked[0] || (ids.includes(MODELS[task]) ? MODELS[task] : MODEL_FALLBACKS[task]);
+    if (next !== MODELS[task]) { MODELS[task] = next; changed = true; }
+  });
+  return changed;
+}
+async function persistModels(extra = {}) {
+  state.settings.models = { ...MODELS };
+  Object.assign(state.settings, extra);
+  try { await saveSettings(); } catch (e) { /* non-fatal */ }
+}
+let _refreshing = null;
+// Fetch the live model list with the user's key and re-pick models. Never throws.
+function refreshModels() {
+  const key = state.settings.groqKey;
+  if (!key) return Promise.resolve({ ok: false, reason: 'no-key' });
+  if (_refreshing) return _refreshing;
+  _refreshing = (async () => {
+    try {
+      const resp = await fetch(`${GROQ_BASE}/models`, { headers: { Authorization: `Bearer ${key}` } });
+      if (!resp.ok) throw new Error(`Groq ${resp.status}`);
+      const data = await resp.json();
+      const ids = (data.data || []).filter(m => m && m.id && m.active !== false).map(m => m.id);
+      if (!ids.length) throw new Error('Groq returned no models');
+      const before = { ...MODELS };
+      const changed = applyModelList(ids);
+      await persistModels({ modelsCheckedAt: Date.now(), modelCount: ids.length });
+      return { ok: true, changed, count: ids.length, before };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    } finally {
+      _refreshing = null;
+    }
+  })();
+  return _refreshing;
+}
+// Background check on launch / when the app comes back to the foreground
+function maybeRefreshModels() {
+  if (!state.settings.groqKey || !navigator.onLine) return;
+  const age = Date.now() - (state.settings.modelsCheckedAt || 0);
+  if (age < MODEL_REFRESH_MS) return;
+  refreshModels().then(r => {
+    if (r.ok && r.changed) toast('AI models updated automatically', 'lime');
+    if (state.view === 'groq') renderGroq();
+  });
+}
+
 // ─── Groq client ───────────────────────────────────────────
-async function groqChat({ model, messages, json = false, temperature = 0.2 }) {
+// Errors that mean "this model id is retired / unavailable / can't do this job" (as opposed to a
+// bad key, rate limit, or bad request body). These trigger a re-check of the live list + retry.
+function isModelError(status, text, task) {
+  if (status === 404) return true;
+  if (status !== 400 && status !== 403) return false;
+  if (/decommission|deprecat|model_not_found|does not exist|no longer (?:supported|available)|not have access|model_permission|permission.*model|model.*(?:blocked|terms)/i.test(text)) return true;
+  if (task === 'vision' && /image|vision|multimodal/i.test(text)) return true;
+  return false;
+}
+// Runs build(model, key) → Response. If the model turns out to be gone, refreshes the list,
+// switches to the next-best model for that task and retries (max 2 switches).
+async function groqRequest(task, build) {
   const key = state.settings.groqKey;
   if (!key) throw new Error('No Groq API key. Set in Settings → Groq.');
-  const body = { model, messages, temperature };
-  if (json) body.response_format = { type: 'json_object' };
-  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-    body: JSON.stringify(body)
-  });
-  if (!resp.ok) {
-    const t = await resp.text();
-    throw new Error(`Groq ${resp.status}: ${t.slice(0, 120)}`);
+  const tried = new Set();
+  let refreshed = false, lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const model = MODELS[task];
+    tried.add(model);
+    const resp = await build(model, key);
+    if (resp.ok) return resp;
+    const text = await resp.text();
+    lastErr = new Error(`Groq ${resp.status}: ${text.slice(0, 120)}`);
+    lastErr.status = resp.status;
+    if (!isModelError(resp.status, text, task)) throw lastErr;
+    if (!refreshed) { refreshed = true; await refreshModels(); }
+    const ranked = (state._ranked && state._ranked[task]) || [];
+    const next = !tried.has(MODELS[task]) ? MODELS[task] : ranked.find(id => !tried.has(id));
+    if (!next) {
+      const e = new Error(`The AI model for ${task} is no longer available. Open Settings → Groq → Refresh models.`);
+      e.status = resp.status; e.modelGone = true; throw e;
+    }
+    MODELS[task] = next;
+    await persistModels();
+    toast(`AI model updated → ${next}`, 'lime');
   }
+  throw lastErr;
+}
+// gpt-oss are reasoning models: keep sorting snappy. Unknown-param 400s are retried without it.
+function optionalParams(model, task) {
+  return /gpt-oss/i.test(model) ? { reasoning_effort: task === 'sort' ? 'low' : 'medium' } : {};
+}
+function cleanModelText(t) { return String(t == null ? '' : t).replace(/<think>[\s\S]*?<\/think>/gi, '').trim(); }
+
+async function groqChat({ task = 'logic', messages, json = false, temperature = 0.2, max_tokens }) {
+  const resp = await groqRequest(task, async (model, key) => {
+    const body = { model, messages, temperature };
+    if (max_tokens) body.max_tokens = max_tokens;
+    if (json) body.response_format = { type: 'json_object' };
+    const extra = optionalParams(model, task);
+    const send = (b) => fetch(`${GROQ_BASE}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify(b)
+    });
+    let r = await send({ ...body, ...extra });
+    if (r.status === 400 && Object.keys(extra).length) {
+      const t = await r.clone().text();
+      if (/reasoning|unsupported|unknown|unrecognized|invalid.*param/i.test(t) && !isModelError(400, t, task)) r = await send(body);
+    }
+    return r;
+  });
   const data = await resp.json();
-  return data.choices[0].message.content;
+  const out = cleanModelText(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content);
+  if (!out) throw new Error('The AI returned an empty reply. Try again.');
+  return out;
 }
 
 async function aiSortNote(text) {
@@ -122,12 +279,16 @@ JSON schema:
   "aiReasoning": "<2 sentences>",
   "why": "<reason>" }`;
   const out = await groqChat({
-    model: MODELS.sort,
+    task: 'sort',
     messages: [{ role: 'system', content: sys }, { role: 'user', content: text }],
     json: true
   });
   try { return JSON.parse(out); }
-  catch { return { stack: null, title: text.slice(0, 50), due: 'idle', urgency: 'low', urgencyReason: '', tags: [], links: [], isRecurring: false, recurCycle: null, confidence: 0, aiReasoning: 'Parse error', why: 'Parse error' }; }
+  catch {
+    // Some models wrap JSON in prose or code fences — pull out the object and retry once
+    const m = out.match(/\{[\s\S]*\}/);
+    if (m) { try { return JSON.parse(m[0]); } catch (_) {} }
+ return { stack: null, title: text.slice(0, 50), due: 'idle', urgency: 'low', urgencyReason: '', tags: [], links: [], isRecurring: false, recurCycle: null, confidence: 0, aiReasoning: 'Parse error', why: 'Parse error' }; }
 }
 
 // ─── Utilities ─────────────────────────────────────────────
@@ -144,16 +305,24 @@ function toast(msg, kind = '') {
 
 // Rich toast with an Undo button. Auto-dismisses after `duration` ms.
 let _undoToastTimers = [];
-function showUndoToast(msg, onUndo, duration = 8000) {
+function showUndoToast(msg, onUndo, duration = 8000, opts = {}) {
   const wrap = document.getElementById('undo-toast');
   if (!wrap) { toast(msg, 'lime'); return; }
   // Clear any prior timers
   _undoToastTimers.forEach(t => clearTimeout(t));
   _undoToastTimers = [];
 
-  document.getElementById('undo-toast-msg').textContent = msg;
+  const msgEl = document.getElementById('undo-toast-msg');
+  if (opts.icon) {
+    msgEl.innerHTML = `<span class="ut-row">${opts.icon}<span class="ut-text"></span></span>`;
+    msgEl.querySelector('.ut-text').textContent = msg;
+  } else {
+    msgEl.textContent = msg;
+  }
+  wrap.classList.toggle('tone-danger', opts.tone === 'danger');
   const progress = document.getElementById('undo-toast-progress');
   const btn = document.getElementById('undo-toast-btn');
+  btn.textContent = opts.undoLabel || 'Undo';   // the exit toast re-labels this to "Stay" — always reset
 
   wrap.classList.add('show');
 
@@ -187,6 +356,8 @@ function stackById(id) { return state.stacks.find(s => s.id === id) || { id, nam
 const HIDE_NAV_VIEWS = new Set(['onb', 'note', 'groq']);
 
 function nav(view, push = true) {
+  // On desktop notes open in the right-hand panel; the phone-style note screen must never activate.
+  if (view === 'note' && isDesktop()) { openNote(state.currentNoteId); return; }
   $$('.view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
   state.view = view;
   if (push && state.navStack[state.navStack.length - 1] !== view) state.navStack.push(view);
@@ -379,7 +550,7 @@ function renderBlade() {
     $('#blade-list').innerHTML = `
       <div class="empty">
         <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></svg></div>
-        <h3>No blades yet</h3>
+        <h3>No notes yet</h3>
         <p>Tap the Pulse button to capture your first note.</p>
       </div>`;
     return;
@@ -415,7 +586,7 @@ function renderBlade() {
         <button class="btn-sm" onclick="event.stopPropagation();LazNote.toggleDone('${n.id}')" style="flex:1;">${n.done ? '↺ Redo' : '✓ Done'}</button>
         <button class="btn-sm" onclick="event.stopPropagation();LazNote.editNote('${n.id}')" style="flex:1;">✎ Edit</button>
         <button class="btn-sm" onclick="event.stopPropagation();LazNote.moveNote('${n.id}')" style="flex:1;">⇄ Move</button>
-        <button class="btn-sm" onclick="event.stopPropagation();LazNote.deleteNote('${n.id}')" style="flex:1;color:#ff6b6b;">✕ Delete</button>
+        <button class="btn-sm" onclick="event.stopPropagation();LazNote.deleteNote('${n.id}')" style="flex:1;color:#ff6b6b;">🗑 Trash</button>
       </div>
       <div id="reasoning-${n.id}" style="margin-top:10px;padding:10px;background:var(--bg);border-radius:6px;border-left:2px solid var(--lime);font-size:11px;line-height:1.5;display:none;max-height:0;overflow:hidden;transition:max-height 0.3s;">
         <strong style="color:var(--lime);">AI Reasoning</strong>
@@ -425,6 +596,7 @@ function renderBlade() {
     </div>`;
   }).join('');
   $$('#blade-list .blade').forEach(el => el.addEventListener('click', () => openNote(el.dataset.id)));
+  markOpenNote();
 }
 
 function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -559,37 +731,63 @@ async function saveCapture(mode) {
 }
 
 // ─── Note detail ──────────────────────────────────────────
+// One renderer for both layouts: the phone-style screen (#note-body) and the desktop right-hand
+// panel (#desktop-edit-body). Every action (move, resort, summarize, edit…) goes through it.
 function openNote(id) {
   state.currentNoteId = id;
-  nav('note');
+  if (isDesktop()) {
+    renderNote();
+    syncDesktopSidebar();
+    updateDesktopHeader();
+    markOpenNote();
+  } else {
+    nav('note');
+  }
+}
+// Highlight the note that's open in the desktop panel
+function markOpenNote() {
+  $$('#blade-list .blade, #airlock-list .blade').forEach(el =>
+    el.classList.toggle('is-open', isDesktop() && el.dataset.id === state.currentNoteId));
+}
+// Re-render whichever list is on screen (used after a note changes)
+function renderActiveList() {
+  const v = state.view;
+  if (v === 'archive') renderArchive();
+  else if (v === 'cards') renderCards();
+  else if (v === 'airlock') renderAirlock();
+  else renderBlade();
+  if (isDesktop()) { updateDesktopBadges(); markOpenNote(); }
+}
+// Leave the note after Done / Trash / Confirm — phone: go back; desktop: close the panel
+function leaveNote() {
+  if (isDesktop()) { closeDesktopEditPanel(); }
+  else back();
+  renderActiveList();
+}
+const DONE_SVG   = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>';
+const REVIVE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/></svg>';
+const TRASH_SVG  = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--red);"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>';
+// The primary action: "Done" (or "Revive" for a finished note). Icon + label; label hides on tiny phones.
+function setDoneButton(btn, n, isDone) {
+  if (!btn) return;
+  const tip = isDone ? 'Revive note' : 'Mark complete';
+  btn.setAttribute('data-tip', tip);
+  btn.setAttribute('aria-label', tip);
+  btn.innerHTML = (isDone ? REVIVE_SVG : DONE_SVG) + `<span class="act-label">${isDone ? 'Revive' : 'Done'}</span>`;
+  btn.onclick = isDone ? () => LazNote.reviveNote(n.id) : () => LazNote.markDone();
 }
 function renderNote() {
   const n = state.notes.find(x => x.id === state.currentNoteId);
-  if (!n) { back(); return; }
+  if (!n) { if (isDesktop()) closeDesktopEditPanel(); else back(); return; }
+  const desk = isDesktop();
   const stk = stackById(n.stack);
   const d = fmtDue(n.due);
   const isDone = n.status === 'done';
 
-  // Update done button appearance
-  const doneBtn = document.getElementById('note-done-btn');
-  if (doneBtn) {
-    // Always restore base class
-    doneBtn.className = 'action-btn act-done has-tip';
-    if (isDone) {
-      doneBtn.setAttribute('data-tip', 'Revive note');
-      doneBtn.setAttribute('aria-label', 'Revive note');
-      // ↺ revive icon — keep lime fill so it stays visible
-      doneBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/></svg>';
-      doneBtn.onclick = () => LazNote.reviveNote(n.id);
-    } else {
-      doneBtn.setAttribute('data-tip', 'Mark complete');
-      doneBtn.setAttribute('aria-label', 'Mark complete');
-      doneBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>';
-      doneBtn.onclick = () => LazNote.markDone();
-    }
-  }
-
-  $('#note-stack').textContent = stk.name + (n.status === 'airlock' ? ' · Airlock' : isDone ? ' · Done' : '');
+  setDoneButton(document.getElementById(desk ? 'desktop-done-btn' : 'note-done-btn'), n, isDone);
+  const stackLabel = stk.name + (n.status === 'airlock' ? ' · Airlock' : isDone ? ' · Done' : '');
+  if (desk) document.getElementById('desktop-edit-title').textContent = stackLabel + (n.title ? ' · ' + n.title : '');
+  else $('#note-stack').textContent = stackLabel;
   const stackChips = state.stacks.map(s => `<span class="chip ${s.id === n.stack ? 'lime' : ''}" data-stack="${s.id}">${s.name}</span>`).join('');
 
   // Build hashtags display
@@ -604,7 +802,14 @@ function renderNote() {
        <div style="display:flex;gap:5px;flex-wrap:wrap;">${(n.links||[]).map(l => `<span style="font-size:11px;padding:3px 8px;border-radius:5px;background:var(--surface);color:var(--ink-70);border:1px solid var(--line-2);">${escapeHtml(l)}</span>`).join('')}</div></div>`
     : '';
 
-  $('#note-body').innerHTML = `
+  const airlockBanner = n.status === 'airlock' ? `
+    <div class="airlock-banner">
+      <div class="ab-text"><strong>The AI wasn't sure about this one.</strong><span>Suggested stack: <b>${escapeHtml(stk.name)}</b>${n.confidence ? ' · ' + Math.round(n.confidence * (n.confidence > 1 ? 1 : 100)) + '% confident' : ''}. Confirm it, or pick a different stack below.</span></div>
+      <button class="btn primary ab-confirm" onclick="LazNote.confirmAirlock()">✓ Confirm → ${escapeHtml(stk.name)}</button>
+    </div>` : '';
+
+  const html = `
+    ${airlockBanner}
     <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--lime);text-transform:uppercase;">${stk.name} · ${d.label}</div>
     <div style="font-size:24px;font-weight:700;letter-spacing:-0.02em;margin-top:6px;line-height:1.2;">${escapeHtml(n.title)}</div>
     <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
@@ -613,7 +818,7 @@ function renderNote() {
       ${n.urgency && n.urgency !== 'low' ? `<span class="chip" style="color:${n.urgency==='high'?'var(--lime)':'#ff9900'};">${n.urgency.toUpperCase()}</span>` : ''}
     </div>
 
-    <textarea class="input" id="note-text" style="margin-top:14px;min-height:180px;${isDone ? 'opacity:0.7;' : ''}" ${isDone ? 'readonly' : ''}>${escapeHtml(n.text)}</textarea>
+    <textarea class="input note-textarea" id="note-text" style="margin-top:14px;${isDone ? 'opacity:0.7;' : ''}" ${isDone ? 'readonly' : ''}>${escapeHtml(n.text)}</textarea>
 
     ${hashtagsHtml}
     ${linkedHtml}
@@ -662,16 +867,30 @@ function renderNote() {
     ${!isDone ? `<div style="margin-top:16px;font-family:var(--mono);font-size:9.5px;letter-spacing:0.16em;color:var(--ink-50);">MOVE TO</div>
     <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;" id="move-chips">${stackChips}</div>` : ''}
 
-    ${n.status === 'airlock'
-      ? `<div style="margin-top:16px;"><button class="btn primary block" onclick="LazNote.confirmAirlock()">Confirm → ${stk.name}</button></div>`
-      : ''}
   `;
 
+  let host;
+  if (desk) {
+    document.getElementById('desktop-edit-empty').style.display = 'none';
+    document.getElementById('desktop-edit-header').style.display = '';
+    host = document.getElementById('desktop-edit-body');
+    host.style.display = '';
+    $('#note-body').innerHTML = '';          // keep ids unique — the phone view is hidden on desktop
+  } else {
+    host = $('#note-body');
+  }
+  host.innerHTML = html;
+
   // wire move chips
-  $$('#move-chips .chip').forEach(c => c.addEventListener('click', () => LazNote.moveNote(c.dataset.stack)));
-  // autosave on blur
-  const ta = $('#note-text');
-  if (ta && !isDone) ta.addEventListener('blur', () => LazNote.saveNoteText());
+  host.querySelectorAll('#move-chips .chip').forEach(c => c.addEventListener('click', () => LazNote.moveCurrentNote(c.dataset.stack)));
+  // note text: grows with content (capped), autosaves on blur
+  const ta = host.querySelector('#note-text');
+  if (ta) {
+    const fit = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight + 2, Math.round(window.innerHeight * 0.5)) + 'px'; };
+    fit(); requestAnimationFrame(fit);
+    ta.addEventListener('input', fit);
+    if (!isDone) ta.addEventListener('blur', () => LazNote.saveNoteText());
+  }
 }
 
 function toggleLogicSection() {
@@ -682,6 +901,22 @@ function toggleLogicSection() {
   el.style.display = open ? 'block' : 'none';
   if (icon) icon.textContent = open ? '▾' : '▸';
 }
+// Move a note to Trash and confirm with an Undo toast — the single path for every "trash" action.
+async function trashNote(id, { leave = false } = {}) {
+  const n = state.notes.find(x => x.id === id); if (!n) return;
+  const prev = { status: n.status, done: n.done, doneAt: n.doneAt, trashedAt: n.trashedAt || null };
+  n.status = 'trash'; n.trashedAt = Date.now();
+  await idbPut('notes', n);
+  if (leave) leaveNote(); else renderActiveList();
+  const label = (n.title || n.text || 'Note').trim().replace(/\s+/g, ' ').slice(0, 34);
+  showUndoToast(`Moved to trash · ${label}`, async () => {
+    n.status = prev.status; n.done = prev.done; n.doneAt = prev.doneAt; n.trashedAt = prev.trashedAt;
+    await idbPut('notes', n);
+    renderActiveList();
+    toast('↺ Restored from trash', 'lime');
+  }, 7000, { tone: 'danger', icon: TRASH_SVG });
+}
+
 // ─── Stacks ───────────────────────────────────────────────
 function renderStacks() {
   const defaults = ['biz','diy','dev','per'];
@@ -699,7 +934,7 @@ function renderStacks() {
     <div style="margin-top:16px;">
       <button class="btn primary block" onclick="LazNote.addStack()">+ Add New Stack</button>
     </div>
-    <div style="margin-top:8px;font-size:11px;color:var(--ink-50);text-align:center;">New stacks appear in the blade tabs and capture sheet</div>
+    <div style="margin-top:8px;font-size:11px;color:var(--ink-50);text-align:center;">New stacks appear in the note tabs and capture sheet</div>
   `;
 }
 
@@ -1112,8 +1347,18 @@ function renderSettings() {
 }
 
 // ─── Groq detail ──────────────────────────────────────────
-function renderGroq() {
+function timeAgo(ts) {
+  if (!ts) return 'never';
+  const m = Math.round((Date.now() - ts) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + ' min ago';
+  const h = Math.round(m / 60);
+  return h < 48 ? h + ' h ago' : Math.round(h / 24) + ' days ago';
+}
+function renderGroq(keepResult) {
   const s = state.settings;
+  const prevResult = keepResult ? document.getElementById('groq-test-result') : null;
+  const keepHtml = prevResult && prevResult.style.display !== 'none' ? { html: prevResult.innerHTML, style: prevResult.getAttribute('style') } : null;
   const connected = !!s.groqKey;
   $('#groq-body').innerHTML = `
     <div style="background:var(--surface);border:1px solid ${connected ? 'rgba(197,236,58,0.25)' : 'var(--line-2)'};border-radius:var(--r-md);padding:14px;margin:10px 0 16px;">
@@ -1136,16 +1381,22 @@ function renderGroq() {
     </div>
     <div id="groq-test-result" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.5;"></div>
 
-    <div class="section-label">Models per task</div>
+    <div class="section-label">Models per task · auto-selected</div>
     <div class="section-group">
-      <div class="row"><span class="r-label">Sorting</span><span class="r-value">${MODELS.sort}</span></div>
-      <div class="row"><span class="r-label">Logic / why</span><span class="r-value">${MODELS.logic}</span></div>
+      ${MODEL_TASKS.map(([k, label]) => `<div class="row" style="cursor:default;"><span class="r-label">${label}</span><span class="r-value" style="text-align:right;word-break:break-all;">${escapeHtml(MODELS[k])}</span></div>`).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+      <button class="btn" id="groq-refresh-btn" style="flex:0 0 auto;${connected ? '' : 'opacity:.5;'}" onclick="LazNote.refreshModelsNow()" ${connected ? '' : 'disabled'}>↻ Refresh models</button>
+      <div style="font-size:11px;color:var(--ink-50);line-height:1.5;">${connected
+        ? `Checked ${timeAgo(s.modelsCheckedAt)}${s.modelCount ? ` · ${s.modelCount} available` : ''}.<br>Re-checks daily, and switches automatically if Groq retires a model.`
+        : 'Add a key and LazNote will pick the best live model for each task, and keep them current.'}</div>
     </div>
 
     <div style="margin-top:18px;font-size:12px;color:var(--ink-50);line-height:1.5;">
       <strong style="color:var(--ink-70);">Privacy:</strong> Your key never leaves this device except in direct HTTPS calls to api.groq.com. No backend, no logging.
     </div>
   `;
+  if (keepHtml) { const r = document.getElementById('groq-test-result'); r.innerHTML = keepHtml.html; r.setAttribute('style', keepHtml.style); }
 }
 
 // ─── Public methods (window.LazNote) ──────────────────────
@@ -1271,9 +1522,23 @@ const LazNote = {
     const v = $('#groq-key-input').value.trim();
     if (!v || v.startsWith('•')) { toast('Paste a fresh key'); return; }
     state.settings.groqKey = v;
+    state.settings.modelsCheckedAt = 0;
     await saveSettings();
-    toast('Key saved', 'lime');
+    toast('Key saved · checking available models…', 'lime');
     renderGroq();
+    const r = await refreshModels();
+    if (r.ok) toast(`Key saved · ${r.count} models available`, 'lime');
+    else toast('Key saved · couldn\'t list models (' + (r.error || 'offline') + ')', 'red');
+    if (state.view === 'groq') renderGroq();
+  },
+  async refreshModelsNow() {
+    const btn = document.getElementById('groq-refresh-btn');
+    if (!state.settings.groqKey) { toast('Add a Groq key first'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+    const r = await refreshModels();
+    if (r.ok) toast(r.changed ? 'Models updated' : 'Models are up to date', 'lime');
+    else toast('Refresh failed: ' + (r.error || 'offline'), 'red');
+    if (state.view === 'groq') renderGroq();
   },
   async testKey() {
     const btn    = document.getElementById('groq-test-btn');
@@ -1307,14 +1572,28 @@ const LazNote = {
 
     const t0 = Date.now();
     try {
-      // Direct fetch so we test the typed key without overwriting saved state
-      const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      // Direct fetches so we test the typed key without overwriting saved state.
+      // 1) ask Groq which models this key can use and pick the sorting model from that list
+      let testModel = MODELS.sort, modelCount = null;
+      try {
+        const lr = await fetch(`${GROQ_BASE}/models`, { headers: { 'Authorization': `Bearer ${keyToTest}` } });
+        if (lr.ok) {
+          const ids = ((await lr.json()).data || []).filter(m => m && m.id && m.active !== false).map(m => m.id);
+          modelCount = ids.length;
+          testModel = rankModels('sort', ids)[0] || testModel;
+          // If this is the saved key, adopt the fresh picks for every task
+          if (!useTyped) { applyModelList(ids); await persistModels({ modelsCheckedAt: Date.now(), modelCount: ids.length }); testModel = MODELS.sort; }
+        }
+      } catch (_) { /* fall through — the completion below will surface real errors */ }
+      // 2) prove it end-to-end with a tiny completion
+      const resp = await fetch(`${GROQ_BASE}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${keyToTest}` },
         body: JSON.stringify({
-          model: MODELS.sort,
+          model: testModel,
           messages: [{ role: 'user', content: 'Reply with the single word: ok' }],
-          temperature: 0.2
+          temperature: 0.2,
+          ...optionalParams(testModel, 'sort')
         })
       });
       const ms = Date.now() - t0;
@@ -1329,13 +1608,13 @@ const LazNote = {
         result.innerHTML = `<strong>✗ Failed</strong> · ${escapeHtml(msg.slice(0,140))}`;
       } else {
         const data = await resp.json();
-        const out = data?.choices?.[0]?.message?.content || '';
+        const out = cleanModelText(data?.choices?.[0]?.message?.content);
         const ok = out.toLowerCase().includes('ok');
         result.style.background = 'rgba(197,236,58,0.08)';
         result.style.border = '1px solid rgba(197,236,58,0.3)';
         result.style.color = 'var(--lime)';
         result.innerHTML = ok
-          ? `<strong>✓ Connected</strong> · ${ms}ms · model <code>${MODELS.sort}</code> replied "ok"`
+          ? `<strong>✓ Connected</strong> · ${ms}ms · <code>${escapeHtml(testModel)}</code> replied "ok"${modelCount ? ` · ${modelCount} models available` : ''}`
           : `<strong>✓ Reachable</strong> · ${ms}ms · model replied: ${escapeHtml(out.slice(0,80))}`;
       }
     } catch (e) {
@@ -1346,12 +1625,14 @@ const LazNote = {
     } finally {
       btn.disabled = !state.settings.groqKey && !useTyped;
       btn.textContent = 'Test';
+      if (state.view === 'groq' && !useTyped) renderGroq(true);
     }
   },
   // ── NOTE LIFECYCLE ──────────────────────────────────
   async confirmAirlock() {
     const n = state.notes.find(x => x.id === state.currentNoteId); if (!n) return;
-    n.status = 'active'; await idbPut('notes', n); back(); renderBlade(); toast('Filed', 'lime');
+    n.status = 'active'; n.pendingApproval = false; await idbPut('notes', n);
+    toast('Filed → ' + stackById(n.stack).name, 'lime'); leaveNote();
   },
   async markDone() {
     const n = state.notes.find(x => x.id === state.currentNoteId); if (!n) return;
@@ -1363,26 +1644,19 @@ const LazNote = {
       toast('Done ✓ · moved to Archive', 'lime');
     }
     n.status = 'done'; n.done = true; n.doneAt = Date.now();
-    await idbPut('notes', n); back(); renderBlade();
+    await idbPut('notes', n); leaveNote();
   },
   async reviveNote(id) {
     const n = state.notes.find(x => x.id === id); if (!n) return;
     n.status = 'active'; n.done = false; n.doneAt = null;
     await idbPut('notes', n); renderArchive(); renderBlade();
+    if (state.currentNoteId === id && (state.view === 'note' || isDesktop())) renderNote();
+    if (isDesktop()) updateDesktopBadges();
     toast('↺ Revived to ' + stackById(n.stack).name, 'lime');
   },
-  async trashCurrentNote() {
-    const n = state.notes.find(x => x.id === state.currentNoteId); if (!n) return;
-    if (!confirm('Move to trash?')) return;
-    n.status = 'trash'; n.trashedAt = Date.now();
-    await idbPut('notes', n); back(); renderBlade(); toast('Moved to trash');
-  },
-  async trashFromArchive(id) {
-    const n = state.notes.find(x => x.id === id); if (!n) return;
-    if (!confirm('Move to trash?')) return;
-    n.status = 'trash'; n.trashedAt = Date.now();
-    await idbPut('notes', n); renderArchive(); toast('Moved to trash');
-  },
+  // Every route into the trash goes through trashNote(): it always confirms with an Undo toast.
+  async trashCurrentNote() { return trashNote(state.currentNoteId, { leave: true }); },
+  async trashFromArchive(id) { return trashNote(id); },
   async restoreFromTrash(id) {
     const n = state.notes.find(x => x.id === id); if (!n) return;
     n.status = 'active'; n.done = false; n.doneAt = null; n.trashedAt = null;
@@ -1401,9 +1675,14 @@ const LazNote = {
     state.notes = state.notes.filter(n => n.status !== 'trash');
     renderArchive(); toast('Trash emptied (' + trash.length + ' notes)');
   },
-  async moveNote(stackId) {
+  // Note-screen "Move to" chips. (Named apart from LazNote.moveNote(id), the card-menu modal.)
+  async moveCurrentNote(stackId) {
     const n = state.notes.find(x => x.id === state.currentNoteId); if (!n) return;
-    n.stack = stackId; n.status = 'active'; await idbPut('notes', n); renderNote(); renderBlade();
+    if (n.stack === stackId && n.status !== 'airlock') return;
+    n.stack = stackId; n.status = 'active'; n.updatedAt = Date.now();
+    await idbPut('notes', n);
+    toast('→ Moved to ' + stackById(stackId).name, 'lime');
+    renderNote(); renderActiveList();
   },
   async saveNoteText() {
     const n = state.notes.find(x => x.id === state.currentNoteId); if (!n) return;
@@ -2004,7 +2283,7 @@ const LazNote = {
     textEl.textContent = '';
     try {
       const out = await groqChat({
-        model: MODELS.logic,
+        task: 'logic',
         messages: [
           { role: 'system', content: 'You are a concise note summarizer. Write 2-3 punchy sentences that capture the core of the note, what needs to happen, and when. No preamble.' },
           { role: 'user', content: `Note title: ${n.title}\n\nNote text:\n${n.text}` }
@@ -2028,7 +2307,7 @@ const LazNote = {
     const stk = stackById(n.stack);
     try {
       const out = await groqChat({
-        model: MODELS.logic,
+        task: 'logic',
         messages: [
           { role: 'system', content: `You are a practical life advisor. The note is in the "${stk.name}" stack (${stk.desc}). Give 2-4 concrete, actionable steps the person can take right now. Be specific and direct — no fluff, no "consider" or "you might want to". Format as a short numbered list.` },
           { role: 'user', content: `Note: ${n.title}\n\n${n.text}` }
@@ -2207,6 +2486,7 @@ function showExitToast() {
   const msg = document.getElementById('undo-toast-msg');
   const btn = document.getElementById('undo-toast-btn');
   const progress = document.getElementById('undo-toast-progress');
+  wrap.classList.remove('tone-danger');
   msg.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lime)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>Press back again to exit LazNote</span>';
   btn.textContent = 'Stay';
   btn.onclick = () => {
@@ -2238,7 +2518,7 @@ function isDesktop() { return DESKTOP_MQ.matches; }
 function setupDesktopMode() {
   if (!isDesktop()) {
     // Leaving desktop mode → restore views to the shell
-    if (_desktopActive) restoreViewsToShell();
+    if (_desktopActive) { restoreViewsToShell(); closeDesktopEditPanel(); }
     _desktopActive = false;
     return;
   }
@@ -2263,6 +2543,14 @@ function setupDesktopMode() {
 
   // Refresh badges
   updateDesktopBadges();
+
+  // Came from the phone note screen (window resized up)? Show that note in the side panel instead.
+  if (state.view === 'note') {
+    const id = state.currentNoteId;
+    state.navStack.pop();
+    nav('blade', false);
+    if (id) openNote(id);
+  }
 
   // Sync sidebar active state with current view
   syncDesktopSidebar();
@@ -2295,7 +2583,7 @@ function updateDesktopBadges() {
 
 function updateDesktopHeader() {
   const titles = {
-    blade: ['Blades', 'All active notes'],
+    blade: ['Notes', 'All active notes'],
     cards: ['Cards', 'Grid view'],
     stacks: ['Stacks', 'Manage your folders'],
     airlock: ['Airlock', 'AI was unsure · you decide'],
@@ -2340,58 +2628,19 @@ function navWrapper(view, push = true) {
 // Override the reference everywhere that goes through LazNote.go
 LazNote.go = navWrapper;
 
-function renderDesktopEditPanel() {
-  const n = state.notes.find(x => x.id === state.currentNoteId);
-  if (!n) { closeDesktopEditPanel(); return; }
-  document.getElementById('desktop-edit-empty').style.display = 'none';
-  const header = document.getElementById('desktop-edit-header');
-  const bodyEl = document.getElementById('desktop-edit-body');
-  header.style.display = '';
-  bodyEl.style.display = '';
-  document.getElementById('desktop-edit-title').textContent = stackById(n.stack).name + ' · ' + n.title;
-
-  // Render essentially the same content as renderNote() into the edit panel body
-  const stk = stackById(n.stack);
-  const d = fmtDue(n.due);
-  const isDone = n.status === 'done';
-  const allHashtags = [...new Set([...(n.hashtags||[]), ...(n.tags||[])])];
-  const hashtagsHtml = allHashtags.length
-    ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px;">${allHashtags.map(t => `<span style="font-size:11px;padding:3px 8px;border-radius:5px;background:rgba(197,236,58,0.12);color:var(--lime);border:1px solid rgba(197,236,58,0.25);">#${t}</span>`).join('')}</div>`
-    : '';
-  bodyEl.innerHTML = `
-    <div style="font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--lime);text-transform:uppercase;">${stk.name} · ${d.label}</div>
-    <div style="font-size:18px;font-weight:700;letter-spacing:-0.01em;margin-top:6px;line-height:1.3;">${escapeHtml(n.title)}</div>
-    <textarea class="input" id="note-text" style="margin-top:12px;min-height:280px;${isDone ? 'opacity:0.7;' : ''}" ${isDone ? 'readonly' : ''}>${escapeHtml(n.text)}</textarea>
-    ${hashtagsHtml}
-    <div style="margin-top:14px;font-family:var(--mono);font-size:10px;color:var(--ink-50);">
-      ${new Date(n.createdAt).toLocaleString()}
-    </div>
-  `;
-
-  // Save on blur
-  const ta = bodyEl.querySelector('#note-text');
-  if (ta) ta.addEventListener('blur', () => LazNote.saveNoteText && LazNote.saveNoteText());
-}
+// The desktop panel now shares the one renderer with the phone screen
+function renderDesktopEditPanel() { renderNote(); }
 
 function closeDesktopEditPanel() {
   document.getElementById('desktop-edit-empty').style.display = '';
   document.getElementById('desktop-edit-header').style.display = 'none';
-  document.getElementById('desktop-edit-body').style.display = 'none';
+  const body = document.getElementById('desktop-edit-body');
+  body.style.display = 'none';
+  body.innerHTML = '';
   document.body.classList.remove('desktop-no-edit');
+  state.currentNoteId = null;
+  markOpenNote();
 }
-
-// Patch openNote to route through desktop panel when on desktop
-const _origOpenNote = window.openNote || openNote;
-window.openNote = function(id) {
-  state.currentNoteId = id;
-  if (isDesktop()) {
-    renderDesktopEditPanel();
-    syncDesktopSidebar();
-    updateDesktopHeader();
-  } else {
-    _origOpenNote(id);
-  }
-};
 
 DESKTOP_MQ.addEventListener('change', setupDesktopMode);
 
@@ -2459,6 +2708,8 @@ window.addEventListener('keydown', e => {
     state.notes = await idbAll('notes');
     applyTheme();
     setupDesktopMode();
+    maybeRefreshModels();
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') maybeRefreshModels(); });
     if (!state.settings.onboarded) {
       onbIdx = 0; renderOnb(); nav('onb', false);
     } else {
@@ -2686,25 +2937,20 @@ async function _stopAndTranscribe() {
         const el = document.getElementById('voice-transcript');
         if (el) el.textContent = (voiceFinalTranscript || '') + ' ⏳ Transcribing…';
         try {
-          const fd = new FormData();
-          fd.append('file', blob, `audio.${ext}`);
-          fd.append('model', 'whisper-large-v3');
-          fd.append('response_format', 'text');
-          const resp = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${state.settings.groqKey}` },
-            body: fd
+          const resp = await groqRequest('stt', (model, key) => {
+            const fd = new FormData();
+            fd.append('file', blob, `audio.${ext}`);
+            fd.append('model', model);
+            fd.append('response_format', 'text');
+            return fetch(`${GROQ_BASE}/audio/transcriptions`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${key}` },
+              body: fd
+            });
           });
-          if (resp.ok) {
-            const text = (await resp.text()).trim();
-            resolve(text);
-          } else {
-            const err = await resp.text();
-            toast('Whisper error: ' + err.slice(0, 60), 'red');
-            resolve('');
-          }
+          resolve((await resp.text()).trim());
         } catch(e) {
-          toast('Transcription failed: ' + e.message, 'red');
+          toast('Transcription failed: ' + e.message.slice(0, 80), 'red');
           resolve('');
         }
       } else {
@@ -2889,16 +3135,17 @@ window.LazNote.capturePhoto = async function() {
 async function _analyzeImageForNote(imageDataUrl, resultEl, statusEl) {
   if (resultEl) resultEl.innerHTML = '<span style="color:var(--lime);">⏳ Reading image…</span>';
 
+  let useLocalOcr = !state.settings.groqKey;
   if (state.settings.groqKey) {
     // ── Groq vision (fast, understands context) ──
     try {
       const base64 = imageDataUrl.split(',')[1];
-      const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const resp = await groqRequest('vision', (model, key) => fetch(`${GROQ_BASE}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.settings.groqKey}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
         body: JSON.stringify({
-          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-          max_tokens: 512,
+          model,
+          max_tokens: 1024,
           messages: [{
             role: 'user',
             content: [
@@ -2907,10 +3154,9 @@ async function _analyzeImageForNote(imageDataUrl, resultEl, statusEl) {
             ]
           }]
         })
-      });
-      if (!resp.ok) throw new Error(`Groq ${resp.status}`);
+      }));
       const data = await resp.json();
-      const text = (data.choices?.[0]?.message?.content || '').trim();
+      const text = cleanModelText(data.choices?.[0]?.message?.content);
       if (text) {
         const ta = document.getElementById('capture-text');
         if (ta) ta.value = text;
@@ -2921,9 +3167,17 @@ async function _analyzeImageForNote(imageDataUrl, resultEl, statusEl) {
         if (resultEl) resultEl.innerHTML = '⚠️ No text found in image.';
       }
     } catch(err) {
-      if (resultEl) resultEl.innerHTML = `✗ Vision error: ${err.message}`;
+      // No working vision model (retired / not available to this key): don't strand the user —
+      // fall back to on-device OCR so scanning keeps working.
+      if (err.modelGone || err.status === 404 || err.status === 400) {
+        useLocalOcr = true;
+        toast('Vision model unavailable — using on-device OCR', '');
+      } else if (resultEl) {
+        resultEl.innerHTML = `✗ Vision error: ${escapeHtml(err.message)}`;
+      }
     }
-  } else {
+  }
+  if (useLocalOcr) {
     // ── Tesseract fallback (no key needed) ──
     if (resultEl) resultEl.innerHTML = '<span style="color:var(--lime);">⏳ Running local OCR…</span>';
     try {
@@ -3075,13 +3329,8 @@ window.LazNote._confirmMoveNote = async function(noteId, stackId) {
   document.getElementById('input-modal').style.display = 'none';
 };
 
-window.LazNote.deleteNote = function(id) {
-  if (!confirm('Delete this note?')) return;
-  state.notes = state.notes.filter(n => n.id !== id);
-  idbDel('notes', id);
-  toast('✗ Note deleted', 'lime');
-  renderBlade();
-};
+// Was a permanent delete behind a native confirm(); now goes to Trash with an Undo toast.
+window.LazNote.deleteNote = function(id) { return trashNote(id); };
 
 // ─── V5 Features: Search, Hashtags, Duplicate Detection ─────
 

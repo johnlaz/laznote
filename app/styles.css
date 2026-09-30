@@ -212,6 +212,7 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
 /* capture sheet — proper flex column so keyboard never pushes buttons off-screen */
 .capture-sheet { position: absolute; left: 0; right: 0; top: 0; bottom: 0; background: var(--bg); display: flex; flex-direction: column; z-index: 30; transform: translateY(100%); transition: transform .25s cubic-bezier(.2,.7,.2,1); }
 .capture-sheet.open { transform: translateY(0); }
+.capture-sheet:not(.open) { pointer-events: none; visibility: hidden; transition: transform .28s, opacity .2s, visibility 0s .28s; }
 .capture-handle { width: 40px; height: 4px; background: var(--ink-30); border-radius: 2px; margin: 10px auto 0; flex-shrink: 0; }
 .capture-body { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 22px 16px; min-height: 0; }
 .capture-body::-webkit-scrollbar { display: none; }
@@ -448,7 +449,7 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
 .has-tip[data-tip]::after {
   content: attr(data-tip);
   position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%) translateY(4px);
-  background: #14170f; color: var(--ink); border: 1px solid var(--line-2);
+  background: #14170f; color: #f3f5ec; border: 1px solid rgba(255,255,255,0.14);   /* fixed light-on-dark: readable in BOTH themes */
   padding: 5px 9px; border-radius: 6px;
   font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;
   white-space: nowrap; pointer-events: none;
@@ -457,6 +458,34 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
 }
 .has-tip[data-tip]:hover::after,
 .has-tip[data-tip].show-tip::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Header buttons sit at the very top of the screen — a tooltip above them is clipped off-screen.
+   Open it BELOW instead, and anchor the outermost buttons' tips to the screen side so they never
+   overflow horizontally. */
+.topbar .has-tip[data-tip]::after,
+.desktop-main-header .has-tip[data-tip]::after,
+.desktop-edit-header .has-tip[data-tip]::after {
+  bottom: auto; top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-4px);
+}
+.topbar .has-tip[data-tip]:hover::after, .topbar .has-tip[data-tip].show-tip::after,
+.desktop-main-header .has-tip[data-tip]:hover::after, .desktop-main-header .has-tip[data-tip].show-tip::after,
+.desktop-edit-header .has-tip[data-tip]:hover::after, .desktop-edit-header .has-tip[data-tip].show-tip::after {
+  transform: translateX(-50%) translateY(0);
+}
+.topbar .has-tip[data-tip]:last-child::after,
+.desktop-main-header .has-tip[data-tip]:last-child::after,
+.desktop-edit-header .has-tip[data-tip]:last-child::after { left: auto; right: 0; transform: translateY(-4px); }
+.topbar .has-tip[data-tip]:last-child:hover::after, .topbar .has-tip[data-tip]:last-child.show-tip::after,
+.desktop-main-header .has-tip[data-tip]:last-child:hover::after,
+.desktop-edit-header .has-tip[data-tip]:last-child:hover::after, .desktop-edit-header .has-tip[data-tip]:last-child.show-tip::after { transform: translateY(0); }
+.topbar > .has-tip[data-tip]:first-child::after { left: 0; transform: translateY(-4px); }
+.topbar > .has-tip[data-tip]:first-child:hover::after, .topbar > .has-tip[data-tip]:first-child.show-tip::after { transform: translateY(0); }
+
+/* Keyboard focus is visible on every button */
+.action-btn:focus-visible, .icon-btn:focus-visible, .btn:focus-visible, .btn-sm:focus-visible, .chip:focus-visible, .undo-btn:focus-visible {
+  outline: 2px solid var(--lime); outline-offset: 2px;
+}
 @media (hover: none) {
   /* On touch devices, tooltips only show via .show-tip (long-press handled in JS) */
   .has-tip[data-tip]:hover::after { opacity: 0; }
@@ -477,9 +506,23 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
 .action-btn:active { transform: scale(0.92); }
 .action-btn svg { width: 18px; height: 18px; }
 
-/* Done — lime fill, bold check */
-.action-btn.act-done { background: var(--lime); border-color: var(--lime); color: #0b0d0a; box-shadow: 0 0 12px rgba(197,236,58,0.25); }
-.action-btn.act-done:hover { background: #d6f04d; }
+/* Done — the primary action. Raised lime button with a darker edge, a bottom lip and a label so it
+   reads as pressable (the other actions are outlined; this one is filled and lifts on hover). */
+.action-btn.act-done {
+  background: var(--lime); color: #0b0d0a;
+  border: 1px solid rgba(0,0,0,0.28);
+  box-shadow: 0 2px 0 rgba(0,0,0,0.28), 0 0 14px var(--lime-glow);
+  font-family: var(--sans); font-size: 13px; font-weight: 700; letter-spacing: 0.01em;
+  gap: 7px; grid-auto-flow: column; align-items: center; justify-content: center;
+}
+.action-btn.act-done .act-label { display: none; }
+.action-btn.act-done:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 3px 0 rgba(0,0,0,0.28), 0 0 18px var(--lime-glow); }
+.action-btn.act-done:active { transform: translateY(1px) scale(0.98); box-shadow: 0 0 0 rgba(0,0,0,0), 0 0 10px var(--lime-glow); }
+/* Room for the label: any phone/tablet screen ≥ 480px wide, and always in the desktop side panel */
+@media (min-width: 480px) {
+  .note-actions .action-btn.act-done { width: auto; padding: 0 16px; }
+  .note-actions .action-btn.act-done .act-label { display: inline; }
+}
 
 /* Edit — neutral but visible */
 .action-btn.act-edit { color: var(--ink); }
@@ -633,7 +676,13 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
   max-width: calc(100vw - 32px);
 }
 .toast-undo.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
-.toast-undo .msg { font-size: 13px; color: var(--ink); }
+.toast-undo .msg { font-size: 13px; color: var(--ink); min-width: 0; }
+.toast-undo .ut-row { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+.toast-undo .ut-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(60vw, 340px); }
+.toast-undo.tone-danger { border-color: rgba(239,83,80,0.45); }
+.toast-undo.tone-danger .undo-progress { background: var(--red); }
+.toast-undo .undo-btn { min-height: 32px; min-width: 60px; }
+.toast-undo .undo-btn:hover { filter: brightness(1.1); }
 .toast-undo .undo-btn {
   background: var(--lime); color: #0b0d0a;
   border: 0; border-radius: 6px; padding: 6px 12px;
@@ -781,6 +830,8 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
     display: flex !important;
     align-items: center; justify-content: center;
   }
+  /* The phone-style note screen never shows on desktop — notes open in the side panel */
+  .app-shell > .view[data-view="note"] { display: none !important; }
   .desktop-main .view { display: none !important; }
   .desktop-main .view.active { display: flex !important; flex: 1; }
   .desktop-main .view > .topbar { display: none; }
@@ -823,15 +874,20 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
   }
   .desktop-edit-empty svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.3; }
   .desktop-edit-header {
-    padding: 16px 18px;
+    padding: 14px 18px 14px;
     border-bottom: 1px solid var(--line-2);
-    display: flex; align-items: center; gap: 8px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
     flex-shrink: 0;
   }
+  /* Title gets its own row; the actions sit underneath with a big, labelled Done */
   .desktop-edit-header h2 {
-    flex: 1; font-size: 14px; font-weight: 600; margin: 0;
+    flex: 1 1 100%; font-size: 14px; font-weight: 600; margin: 0 0 2px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .desktop-edit-header .action-btn.act-done { flex: 1 1 auto; width: auto; padding: 0 16px; }
+  .desktop-edit-header .action-btn.act-done .act-label { display: inline; }
+  /* the open note is highlighted in the list */
+  .blade.is-open { border-color: var(--lime); box-shadow: 0 0 0 1px var(--lime), 0 6px 18px var(--lime-soft); }
   .desktop-edit-body {
     flex: 1; overflow-y: auto;
     padding: 16px 18px 24px;
@@ -877,6 +933,30 @@ textarea.input { font-family: var(--sans); font-size: 15px; min-height: 120px; r
 @media (min-width: 1024px) {
   .desktop-sidebar, .desktop-main, .desktop-edit-panel { display: flex; }
 }
+
+/* Phones: lift toasts above the Pulse button (FAB occupies ~64–134px from the bottom) */
+@media (max-width: 1023px) {
+  .toast, .toast-undo { bottom: calc(150px + env(safe-area-inset-bottom)); }
+}
+
+/* ─── Airlock banner (top of the note): the confirm action is front and centre ─── */
+.airlock-banner {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 14px; margin: 2px 0 16px;
+  background: var(--lime-soft); border: 1px solid rgba(197,236,58,0.35);
+  border-left: 3px solid var(--lime); border-radius: var(--r-md);
+}
+.airlock-banner .ab-text { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; line-height: 1.45; color: var(--ink-70); }
+.airlock-banner .ab-text strong { color: var(--ink); font-size: 13px; }
+.airlock-banner .ab-confirm { width: 100%; min-height: 44px; box-shadow: 0 2px 0 rgba(0,0,0,0.25); }
+.btn.primary { box-shadow: 0 2px 0 rgba(0,0,0,0.22); }
+.btn.primary:hover { filter: brightness(1.07); }
+.btn.primary:active { box-shadow: none; transform: translateY(1px) scale(0.99); }
+
+/* Note text: grows to fit, then scrolls inside a slim scrollbar (no chunky OS arrows) */
+.note-textarea { min-height: 120px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--ink-30) transparent; }
+.note-textarea::-webkit-scrollbar { width: 6px; }
+.note-textarea::-webkit-scrollbar-thumb { background: var(--ink-30); border-radius: 3px; }
 
 /* ─── Confirmation modal helper ───────────────────────────────── */
 .confirm-modal-body {
