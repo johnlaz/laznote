@@ -303,6 +303,34 @@ function toast(msg, kind = '') {
   toast._t = setTimeout(() => t.className = 'toast', 2200);
 }
 
+// Themed replacement for window.confirm(): resolves true / false. Cancel is focused first so Enter is safe.
+function askConfirm(message, { title = 'Are you sure?', ok = 'OK', danger = false } = {}) {
+  return new Promise(resolve => {
+    const m = document.getElementById('confirm-modal');
+    if (!m) { resolve(window.confirm(message)); return; }          // markup missing: fall back to native
+    const okBtn = document.getElementById('confirm-ok'), noBtn = document.getElementById('confirm-cancel');
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent = message;
+    okBtn.textContent = ok;
+    okBtn.className = danger ? 'btn danger solid' : 'btn primary';
+    const prevFocus = document.activeElement;
+    const finish = v => {
+      m.style.display = 'none';
+      document.removeEventListener('keydown', onKey, true);
+      m.onclick = okBtn.onclick = noBtn.onclick = null;
+      if (prevFocus && prevFocus.focus) try { prevFocus.focus(); } catch (e) {}
+      resolve(v);
+    };
+    const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); } };
+    document.addEventListener('keydown', onKey, true);
+    okBtn.onclick = () => finish(true);
+    noBtn.onclick = () => finish(false);
+    m.onclick = e => { if (e.target === m) finish(false); };
+    m.style.display = 'flex';
+    setTimeout(() => noBtn.focus(), 30);
+  });
+}
+
 // Rich toast with an Undo button. Auto-dismisses after `duration` ms.
 let _undoToastTimers = [];
 function showUndoToast(msg, onUndo, duration = 8000, opts = {}) {
@@ -514,7 +542,7 @@ function renderBlade() {
   if (state._searchQuery) {
     const banner = document.createElement('div');
     banner.id = 'search-banner';
-    banner.style.cssText = 'padding:8px 18px;background:rgba(197,236,58,0.08);border-bottom:1px solid rgba(197,236,58,0.2);display:flex;align-items:center;justify-content:space-between;font-size:12px;';
+    banner.style.cssText = 'padding:8px 18px;background:var(--lime-soft);border-bottom:1px solid var(--lime-line);display:flex;align-items:center;justify-content:space-between;font-size:12px;';
     banner.innerHTML = `<span style="color:var(--lime);">🔍 "${escapeHtml(state._searchQuery)}" · ${active.length} result(s)</span><button onclick="LazNote.clearSearch()" style="background:none;border:none;color:var(--ink-50);cursor:pointer;font-size:11px;padding:2px 6px;">✕ Clear</button>`;
     document.getElementById('blade-list').before(banner);
   }
@@ -1287,9 +1315,9 @@ function renderSettings() {
 
     <div class="section-label">Data</div>
     <div class="section-group">
-      <div class="row" onclick="LazNote.exportJSON()"><span class="r-label">Export JSON</span><span class="r-value">${state.notes.length} notes</span></div>
+      <div class="row" onclick="LazNote.exportJSON()"><span class="r-label">Backup</span><span class="r-value">${state.notes.length} notes</span></div>
+      <div class="row" onclick="LazNote.importJSON()"><span class="r-label">Restore</span><span class="r-value">from a backup file</span></div>
       <div class="row" onclick="LazNote.openImport()"><span class="r-label">Import files</span><span class="r-value">Word · text · more</span></div>
-      <div class="row" onclick="LazNote.importJSON()"><span class="r-label">Import JSON</span><span class="r-value">restore</span></div>
       <div class="row" onclick="LazNote.wipe()"><span class="r-label" style="color:var(--red);">Delete all notes</span></div>
     </div>
 
@@ -1409,7 +1437,7 @@ const LazNote = {
   saveCapture,
   // Skip the onboarding tour
   async skipOnboarding() {
-    if (!confirm('Skip the tour? You can re-open it from Settings → Help.')) return;
+    if (!(await askConfirm('Skip the tour? You can re-open it from Settings → Help.', { title: 'Skip the tour?', ok: 'Skip' }))) return;
     state.settings.onboarded = true;
     await saveSettings();
     nav('blade');
@@ -1512,7 +1540,7 @@ const LazNote = {
     const defaults = ['biz','diy','dev','per'];
     if (defaults.includes(id)) { toast('Cannot delete default stacks'); return; }
     const count = state.notes.filter(n => n.stack === id && n.status === 'active').length;
-    if (!confirm('Delete stack "' + stk.name + '"?' + (count ? '\n' + count + ' note(s) move to Personal.' : ''))) return;
+    if (!(await askConfirm('Delete stack "' + stk.name + '"?' + (count ? '\n' + count + ' note(s) move to Personal.' : ''), { title: 'Delete stack?', ok: 'Delete', danger: true }))) return;
     state.notes.filter(n => n.stack === id).forEach(n => { n.stack = 'per'; idbPut('notes', n).catch(() => {}); });
     state.stacks = state.stacks.filter(s => s.id !== id);
     await saveStacks();
@@ -1664,14 +1692,14 @@ const LazNote = {
     await idbPut('notes', n); renderArchive(); renderBlade(); toast('↺ Restored', 'lime');
   },
   async permanentDelete(id) {
-    if (!confirm('Permanently delete? Cannot be undone.')) return;
+    if (!(await askConfirm('Permanently delete? Cannot be undone.', { title: 'Delete permanently?', ok: 'Delete', danger: true }))) return;
     state.notes = state.notes.filter(n => n.id !== id);
     await idbDel('notes', id); renderArchive(); toast('Permanently deleted');
   },
   async emptyTrash() {
     const trash = state.notes.filter(n => n.status === 'trash');
     if (!trash.length) { toast('Trash is empty'); return; }
-    if (!confirm('Permanently delete ' + trash.length + ' trashed note(s)?')) return;
+    if (!(await askConfirm('Permanently delete ' + trash.length + ' trashed note(s)?', { title: 'Empty trash?', ok: 'Delete all', danger: true }))) return;
     for (const n of trash) await idbDel('notes', n.id);
     state.notes = state.notes.filter(n => n.status !== 'trash');
     renderArchive(); toast('Trash emptied (' + trash.length + ' notes)');
@@ -1948,7 +1976,7 @@ const LazNote = {
   async unmergeByTimestamp(mergedAt) {
     const snap = (state.settings.mergeHistory || []).find(s => s.mergedAt === mergedAt);
     if (!snap) { toast('Merge record not found'); return; }
-    if (!confirm('Unmerge these notes? The anchor will be restored to its previous state and the duplicate will return to active.')) return;
+    if (!(await askConfirm('Unmerge these notes? The anchor will be restored to its previous state and the duplicate will return to active.', { title: 'Unmerge notes?', ok: 'Unmerge' }))) return;
     await LazNote.unmergeBySnapshot(snap);
   },
 
@@ -1956,7 +1984,7 @@ const LazNote = {
   async unmergeFromArchive(dupId) {
     const snaps = (state.settings.mergeHistory || []).filter(s => s.dupId === dupId);
     if (!snaps.length) { toast('No merge record found for this note'); return; }
-    if (!confirm('Unmerge this note? It will return to active and the anchor will be restored to its previous state.')) return;
+    if (!(await askConfirm('Unmerge this note? It will return to active and the anchor will be restored to its previous state.', { title: 'Unmerge note?', ok: 'Unmerge' }))) return;
     // Most recent first
     snaps.sort((a, b) => b.mergedAt - a.mergedAt);
     await LazNote.unmergeBySnapshot(snaps[0]);
@@ -2042,9 +2070,10 @@ const LazNote = {
     const blob = new Blob([JSON.stringify({ notes: state.notes, stacks: state.stacks, exportedAt: Date.now() }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `laznote-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `laznote-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 100);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+    toast('Backup saved', 'lime');
   },
   importJSON() {
     const i = document.createElement('input');
@@ -2056,15 +2085,15 @@ const LazNote = {
         if (Array.isArray(data.notes)) {
           for (const n of data.notes) await idbPut('notes', n);
           state.notes = await idbAll('notes');
-          toast(`Imported ${data.notes.length} notes`, 'lime');
+          toast(`Restored ${data.notes.length} notes`, 'lime');
           renderBlade(); renderSettings();
         }
-      } catch (e) { toast('Bad file'); }
+      } catch (e) { toast('That isn\'t a LazNote backup', 'red'); }
     };
     i.click();
   },
   async wipe() {
-    if (!confirm('Delete all notes? This cannot be undone.')) return;
+    if (!(await askConfirm('Delete all notes? This cannot be undone.', { title: 'Delete all notes?', ok: 'Delete all', danger: true }))) return;
     for (const n of state.notes) await idbDel('notes', n.id);
     state.notes = []; renderSettings(); renderBlade(); toast('Wiped');
   },
@@ -2335,6 +2364,12 @@ const LazNote = {
   },
 };
 window.LazNote = LazNote;
+// Private helpers import.js needs (app.js is wrapped in an IIFE, so they are not global)
+window.LazNote._api = {
+  get state() { return state; },
+  idbPut, idbAll, uid, toast, askConfirm, extractHashtags, escapeHtml, aiSortNote, saveStacks,
+  renderBlade, renderActiveList, renderSettings
+};
 // Expose private helpers that inline onclick strings need to reach
 window.LazNote.toggleLogicSection = toggleLogicSection;
 
@@ -2353,6 +2388,7 @@ function applyAccent(hex) {
     body.style.removeProperty('--lime');
     body.style.removeProperty('--lime-glow');
     body.style.removeProperty('--lime-soft');
+    body.style.removeProperty('--lime-line');
     body.style.removeProperty('--accent');
     return;
   }
@@ -2361,6 +2397,7 @@ function applyAccent(hex) {
   body.style.setProperty('--accent', hex);
   body.style.setProperty('--lime-glow', `rgba(${r},${g},${b},0.55)`);
   body.style.setProperty('--lime-soft', `rgba(${r},${g},${b},0.15)`);
+  body.style.setProperty('--lime-line', `rgba(${r},${g},${b},0.35)`);
 }
 
 function hexToRgb(hex) {
@@ -3420,12 +3457,12 @@ window.LazNote.showSimilarNotes = function(id) {
   toast(`Found ${similar.length} similar note(s)`, 'info');
 };
 
-window.LazNote.mergeSuggestion = function(noteId1, noteId2) {
+window.LazNote.mergeSuggestion = async function(noteId1, noteId2) {
   const note1 = state.notes.find(n => n.id === noteId1);
   const note2 = state.notes.find(n => n.id === noteId2);
   if (!note1 || !note2) return;
   
-  if (!confirm(`Merge notes?\n\n"${note1.title}"\nvs\n"${note2.title}"`)) return;
+  if (!(await askConfirm(`"${note1.title}"\nvs\n"${note2.title}"`, { title: 'Merge these notes?', ok: 'Merge' }))) return;
   
   // Merge metadata
   note1.tags = [...new Set([...(note1.tags || []), ...(note2.tags || [])])];

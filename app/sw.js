@@ -1,6 +1,6 @@
 // LazNote v4 Service Worker
 // Cache name includes version — bump to force update
-const CACHE_NAME = 'laznote-v4.6';
+const CACHE_NAME = 'laznote-v4.6.3';
 
 const PRECACHE = [
   './index.html',

@@ -488,7 +488,7 @@
           <div class="icon-btn" onclick="document.getElementById('help-modal').style.display='none'"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M5 5l10 10M15 5L5 15"/></svg></div>
         </div>
         <div style="padding:14px 22px 24px;display:flex;flex-direction:column;gap:14px;">
-          <div class="help-item"><div class="help-q">How do I capture a note?</div><div class="help-a">Tap the green + button at the bottom centre of the Notes screen. Type, record your voice, or scan text with your camera. To bring in existing files (Word, text, Markdown…), use Import files in the same sheet or in Settings → Data.</div></div>
+          <div class="help-item"><div class="help-q">How do I capture a note?</div><div class="help-a">Tap the green + button at the bottom centre of the Notes screen. Type, record your voice, or scan text with your camera. To bring in existing files (Word, text, Markdown, CSV…), use Import files in the same sheet or in Settings → Data. The import window has a CSV template: fill it in and import it to create one note per row.</div></div>
           <div class="help-item"><div class="help-q">What is the Airlock?</div><div class="help-a">When AI is unsure where to file a note (confidence &lt;70%) it goes to the Airlock for your review. Tap a note to confirm or move it.</div></div>
           <div class="help-item"><div class="help-q">How do I sort with AI?</div><div class="help-a">Add your Groq API key in Settings → Groq, then tap "Sort with AI" when capturing. AI assigns a stack, urgency, tags, and reasoning.</div></div>
           <div class="help-item"><div class="help-q">What are Stacks?</div><div class="help-a">Stacks are folders — Biz, DIY, Dev, Personal by default. Create custom stacks in the Stacks tab. AI learns your stacks automatically.</div></div>
@@ -525,7 +525,19 @@
       </div>
     </div>
 
-    <!-- ───── Undo toast (rich, with action) ───── -->
+<!-- Themed confirm dialog (used instead of native confirm()) -->
+    <div id="confirm-modal" class="modal-backdrop" style="display:none;" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg">
+      <div class="modal-sheet">
+        <div class="modal-header"><span class="modal-title" id="confirm-title">Are you sure?</span></div>
+        <div class="cf-msg" id="confirm-msg"></div>
+        <div class="cf-actions">
+          <button class="btn ghost" id="confirm-cancel">Cancel</button>
+          <button class="btn primary" id="confirm-ok">OK</button>
+        </div>
+      </div>
+    </div>
+
+        <!-- ───── Undo toast (rich, with action) ───── -->
     <div id="undo-toast" class="toast-undo" role="status" aria-live="polite">
       <span class="msg" id="undo-toast-msg"></span>
       <button class="undo-btn" id="undo-toast-btn">Undo</button>
