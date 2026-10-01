@@ -132,7 +132,7 @@
       </div>
       <div style="padding:6px 18px 10px;display:flex;gap:12px;overflow-x:auto;border-bottom:1px solid var(--line-2);scrollbar-width:none;white-space:nowrap;" id="stack-tabs"></div>
       <div class="scroll" style="padding:12px 14px 140px;display:flex;flex-direction:column;gap:6px;" id="blade-list"></div>
-      <div class="fab-shell"><button class="fab" id="fab-pulse" aria-label="Pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></svg></button></div>
+      <div class="fab-shell"><button class="fab" id="fab-pulse" aria-label="New note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
     </div>
 
     <!-- ───── Cards Grid View ───── -->
@@ -312,6 +312,10 @@
         <!-- Manual stack selector -->
         <div style="margin-top:14px;font-family:var(--mono);font-size:10px;letter-spacing:0.14em;color:var(--ink-50);text-transform:uppercase;">Manual stack</div>
         <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;" id="capture-stack-chips"></div>
+        <button class="btn ghost block" style="margin-top:10px;font-size:12px;" onclick="LazNote.openImport()">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v10M6 9l4 4 4-4M4 16h12"/></svg>
+          Import files (Word, text, Markdown…)
+        </button>
       </div>
 
       <!-- Sticky footer buttons - always visible -->
@@ -425,6 +429,16 @@
     </div>
 
 
+<div id="import-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)LazNote.closeImport()">
+      <div class="modal-sheet" style="max-height:90vh;overflow-y:auto;">
+        <div class="modal-header" style="position:sticky;top:0;background:var(--bg);z-index:1;">
+          <span class="modal-title">Import notes</span>
+          <div class="icon-btn" onclick="LazNote.closeImport()" aria-label="Close"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M5 5l10 10M15 5L5 15"/></svg></div>
+        </div>
+        <div id="import-body"></div>
+      </div>
+    </div>
+
 <div id="search-modal" class="modal-backdrop" style="display:none;" onclick="if(event.target===this)LazNote.closeSearchModal()">
       <div class="modal-sheet">
         <div class="modal-header">
@@ -474,7 +488,7 @@
           <div class="icon-btn" onclick="document.getElementById('help-modal').style.display='none'"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" width="14" height="14"><path d="M5 5l10 10M15 5L5 15"/></svg></div>
         </div>
         <div style="padding:14px 22px 24px;display:flex;flex-direction:column;gap:14px;">
-          <div class="help-item"><div class="help-q">How do I capture a note?</div><div class="help-a">Tap the green Pulse button (●) at the bottom centre of the Notes screen. Type, record your voice, or scan text with your camera.</div></div>
+          <div class="help-item"><div class="help-q">How do I capture a note?</div><div class="help-a">Tap the green + button at the bottom centre of the Notes screen. Type, record your voice, or scan text with your camera. To bring in existing files (Word, text, Markdown…), use Import files in the same sheet or in Settings → Data.</div></div>
           <div class="help-item"><div class="help-q">What is the Airlock?</div><div class="help-a">When AI is unsure where to file a note (confidence &lt;70%) it goes to the Airlock for your review. Tap a note to confirm or move it.</div></div>
           <div class="help-item"><div class="help-q">How do I sort with AI?</div><div class="help-a">Add your Groq API key in Settings → Groq, then tap "Sort with AI" when capturing. AI assigns a stack, urgency, tags, and reasoning.</div></div>
           <div class="help-item"><div class="help-q">What are Stacks?</div><div class="help-a">Stacks are folders — Biz, DIY, Dev, Personal by default. Create custom stacks in the Stacks tab. AI learns your stacks automatically.</div></div>
@@ -519,6 +533,7 @@
     </div>
 
 <script src="app.js"></script>
+<script src="import.js"></script>
 <script>
 // ── Splash ─────────────────────────────────────────────
 (function() {

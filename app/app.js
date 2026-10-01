@@ -549,9 +549,9 @@ function renderBlade() {
   if (!filtered.length) {
     $('#blade-list').innerHTML = `
       <div class="empty">
-        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0"/><path d="M12 18v3"/></svg></div>
+        <div class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
         <h3>No notes yet</h3>
-        <p>Tap the Pulse button to capture your first note.</p>
+        <p>Tap the + button to capture your first note, or import files from Settings.</p>
       </div>`;
     return;
   }
@@ -1288,6 +1288,7 @@ function renderSettings() {
     <div class="section-label">Data</div>
     <div class="section-group">
       <div class="row" onclick="LazNote.exportJSON()"><span class="r-label">Export JSON</span><span class="r-value">${state.notes.length} notes</span></div>
+      <div class="row" onclick="LazNote.openImport()"><span class="r-label">Import files</span><span class="r-value">Word · text · more</span></div>
       <div class="row" onclick="LazNote.importJSON()"><span class="r-label">Import JSON</span><span class="r-value">restore</span></div>
       <div class="row" onclick="LazNote.wipe()"><span class="r-label" style="color:var(--red);">Delete all notes</span></div>
     </div>
