@@ -1,53 +1,96 @@
+![LazNote: One Pulse. Perfectly filed.](docs/banner.svg)
+
 # LazNote
 
-### One Pulse. Endless Filing. Perfectly Filed.
+## What it is
 
-**LazNote** is a local-first Progressive Web App (PWA) designed to bridge the gap between messy thoughts and organized action. Speak it, type it, or snap it—LazNote drops every thought into the right stack and surfaces what's burning now, without a single tag, folder, or follow-up question.
+LazNote is a local-first notes app. Speak it or type it, and AI files the note into the right stack and ranks everything by urgency, so you see what needs attention now. There are no tags, folders or accounts. Notes live on your device and you bring your own Groq key for the AI.
 
-**[Launch LazNote](https://www.google.com/search?q=https://johnlaz.github.io/laznote/app/index.html)** | **[Get a Groq Key](https://console.groq.com/keys)**
+- **Voice first:** talk for as long as you like and LazNote splits it into separate notes.
+- **Urgency, not date:** the Notes view puts what is burning at the top.
+- **Airlock:** notes the AI is unsure about wait there with its reasoning for a one-tap confirm.
+- **Cards, Stacks, Scan, Archive:** browse by card, by stack, scan photos with the camera, and find duplicates to merge.
 
----
+## Live URLs and install
 
-## ⚡ The Flow: One Button. Four Steps.
+| | |
+|---|---|
+| Landing page | https://johnlaz.github.io/laznote/ |
+| App | https://johnlaz.github.io/laznote/app/ |
 
-Most notes apps make you do the filing. LazNote handles the logistics the moment you finish talking.
+Only the app is installable. Open the app URL, then:
 
-1. **Pulse:** Long-press or talk. One target, anywhere in the app.
-2. **Listen:** Live transcription powered by **Whisper** via Groq.
-3. **Sort:** **Llama 3 (70b)** reads context and picks the right stack automatically.
-4. **Surface:** The **Blade View** ranks notes by urgency, not date. "Now" is bright; "Later" fades.
+- **iPhone / iPad:** Share, then Add to Home Screen
+- **Android / Chrome:** menu, then Install app
+- **Desktop Chrome / Edge:** install icon in the address bar
 
-## 🧠 Core Features
+## Quick start
 
-* **Voice-First Capture:** Segment long rants into individual, filed cards automatically.
-* **Blade Prioritization:** A home view that earns its real estate. Urgency-based ranking (Now, Soon, Idle).
-* **Airlock System:** Uncertain notes sit in the Airlock with AI reasoning for a one-tap confirmation.
-* **BYO Groq:** Privacy-centric AI. Use your own API key for direct browser-to-inference speed.
-* **Local-First:** Data stays in your browser's IndexedDB. No accounts, no servers, no tracking.
+![Pulse, Listen, Sort, Airlock, Surface](docs/how-it-works.svg)
 
-## 🛠 Tech Stack
+1. Open the app and finish the short tour.
+2. Get a free key at https://console.groq.com/keys and paste it in Settings, then Groq.
+3. Press the Pulse button and talk, or type, then save.
 
-* **Frontend:** React / Vite (Progressive Web App)
-* **Database:** Local-first IndexedDB
-* **Inference:** Groq Cloud API (Whisper & Llama 3)
-* **Deployment:** GitHub Pages
+Without a key you can still write and file notes by hand. The AI sorting, voice and photo scan need a key.
 
-## 🛡 Privacy by Default
+## AI and model setup
 
-Your notes never touch a server because there aren't any.
+LazNote uses Groq with your own key. There is nothing to pick: the app asks Groq which models your key can use and chooses the best one for each job (sorting, logic, photo scan, voice). It does this when you save a key, about once a day when you open the app, and when you tap **Settings, Groq, Refresh models**. If Groq retires a model, the app checks the list again, switches and retries on its own. Your last good choices are kept so the app still works offline.
 
-* **0 KB** leaves your device (except for direct API calls to Groq).
-* **0 Accounts.** No sign-ups required.
-* **0 Cookies.** No telemetry or third-party scripts.
+## Data and privacy
 
-## 📲 Installation
+- Notes, stacks, settings and your Groq key are stored in your browser's IndexedDB on this device. There is no LazNote server and no account.
+- What you send to the AI (the text of a note, a recording, or a photo) goes straight from your browser to `api.groq.com`.
+- The app also loads Tesseract.js and html2pdf.js from cdnjs and the Inter and JetBrains Mono fonts from Google Fonts. After the first online use they are cached for offline.
+- Camera scan and PDF export need those files. Offline, the first scan or export may not work until they have been loaded once.
+- No cookies and no analytics.
 
-LazNote is a PWA and can be installed on any device directly from the browser:
+## Repo layout
 
-* **iOS:** Share -> Add to Home Screen
-* **Android/Chrome:** Settings -> Install App
-* **Desktop:** Install icon in the address bar
+![Architecture: app, service worker and IndexedDB on your device; Groq and CDN files outside](docs/architecture.svg)
 
----
+```
+/README.md
+/index.html            landing page (plain site, no manifest, no service worker)
+/sw.js                 one-time cleanup of an old service worker; nothing registers it
+/media/                landing page background videos
+/docs/                 banner.svg, how-it-works.svg, architecture.svg
+/app/index.html        the app shell
+/app/app.js            app logic
+/app/import.js         import and share handling
+/app/styles.css        styles
+/app/manifest.webmanifest
+/app/sw.js             app service worker (cache "laznote-v<version>")
+/app/icon-192.png      maskable-safe
+/app/icon-512.png      maskable-safe
+/app/shot-notes-narrow.png   390x844
+/app/shot-notes-wide.png     1280x800
+/app/splash.mp4        launch splash
+```
 
-*Built for those who need to empty their head and trust the system to handle the rest.*
+The app is a few plain files with no build step.
+
+## Deploy and update
+
+The site is served by GitHub Pages from the root of this repo. To release a change:
+
+1. Edit the files and commit to the default branch.
+2. Bump the version in three places together: `APP_VER` in `app/app.js`, `VERSION` in `app/sw.js`, and the stamp in `app/index.html`.
+3. Push. Installed copies pick up the new version the next time they are opened online.
+
+The service worker only manages caches that start with `laznote-`, because every app on `johnlaz.github.io` shares one origin.
+
+## Changelog
+
+| Version | Date | Changes |
+|---|---|---|
+| 4.7.0 | 2026-10-08 | Cleaner repo layout. App service worker no longer deletes other apps' caches, loads new releases first and caches Tesseract, html2pdf and fonts after first use. Maskable icons redrawn. Real screenshots. Landing page is now a plain site. Version stamp unified. |
+| 4.5 | n/a | AI models picked automatically from your Groq key and refreshed daily. "Blades" renamed "Notes". Undo for trash. Desktop layout and button fixes. |
+| 4.0 | n/a | Capture sheet with pinned buttons, clearer note actions, six-card tour, merge with undo, desktop three-column mode and keyboard shortcuts. |
+
+## Studio
+
+Built by LAZLAB Creations. Questions: lazlab.io@gmail.com
+
+© 2026 LAZLAB Creations. All Rights Reserved.
